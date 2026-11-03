@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tela Compartilhada</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  :root{--bg:#0f1115;--card:#181b22;--fg:#e8eaf0;--mut:#9aa1b2;--acc:#5b8cff;--err:#ff6b6b;--line:#2a2f3a}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:24px 16px}
+  h1{font-size:22px;margin:0}
+  .card{background:var(--card);border-radius:14px;padding:20px;width:100%;max-width:1000px;margin-top:16px}
+  button,select{font:inherit;border:0;border-radius:10px;padding:10px 16px;cursor:pointer}
+  button{background:var(--acc);color:#fff;font-weight:600}
+  button.sec{background:var(--line);color:var(--fg)}
+  button.danger{background:var(--err)}
+  select{background:var(--line);color:var(--fg)}
+  select:disabled{opacity:.5}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .link{display:flex;gap:8px;margin-top:14px}
+  .link input{flex:1;min-width:0;background:#0b0d11;color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit}
+  video{width:100%;max-height:78vh;background:#000;border-radius:10px;margin-top:14px;display:block}
+  .status{color:var(--mut);margin-top:10px}
+  .badge{background:var(--line);border-radius:999px;padding:4px 12px;font-size:13px}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<h1>📺 Tela Compartilhada</h1>
+<div class="status" id="sub"></div>
+
+<!-- Quem compartilha -->
+<section class="card" id="host">
+  <div class="row">
+    <select id="modo">
+      <option value="motion">Fluidez — jogos e vídeos (60 fps)</option>
+      <option value="detail">Nitidez — texto e código (30 fps)</option>
+    </select>
+    <button id="start">Compartilhar tela</button>
+    <button id="stop" class="danger hidden">Parar</button>
+    <span class="badge hidden" id="count">0 assistindo</span>
+  </div>
+  <div class="link hidden" id="linkBox">
+    <input id="link" readonly>
+    <button id="copy" class="sec">Copiar link</button>
+  </div>
+  <video id="preview" muted autoplay playsinline class="hidden"></video>
+  <div class="status" id="hostStatus">Escolha o modo e clique em compartilhar. Depois é só mandar o link pros seus amigos.</div>
+</section>
+
+<!-- Quem assiste -->
+<section class="card hidden" id="viewer">
+  <div class="row">
+    <button id="sound" class="sec">🔊 Ativar som</button>
+    <button id="full" class="sec">⛶ Tela cheia</button>
+  </div>
+  <video id="remote" autoplay playsinline muted></video>
+  <div class="status" id="viewStatus">Conectando…</div>
+</section>
+
+<script>
+const $ = id => document.getElementById(id);
+const show = (...ids) => ids.forEach(i => $(i).classList.remove('hidden'));
+const hide = (...ids) => ids.forEach(i => $(i).classList.add('hidden'));
+
+const sala = new URLSearchParams(location.search).get('sala');
+if (sala) assistir(sala); else hospedar();
+
+/* ---------- Quem compartilha ---------- */
+function hospedar() {
+  $('sub').textContent = 'Você é quem vai compartilhar.';
+  let peer = null, stream = null;
+  const calls = new Map();
+  const st = t => $('hostStatus').textContent = t;
+  const contar = () => $('count').textContent = `${calls.size} assistindo`;
+
+  $('start').onclick = async () => {
+    const motion = $('modo').value === 'motion';
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: motion ? 60 : 30 } },
+        audio: true
+      });
+    } catch (e) { st('Compartilhamento cancelado.'); return; }
+
+    const vt = stream.getVideoTracks()[0];
+    vt.contentHint = motion ? 'motion' : 'detail';
+    vt.onended = parar;
+
+    $('preview').srcObject = stream;
+    $('modo').disabled = true;
+    hide('start'); show('stop', 'count', 'preview');
+    contar();
+    st('Abrindo a sala…');
+    abrirSala(motion);
+  };
+
+  function abrirSala(motion) {
+    const id = 'tela-' + Math.random().toString(36).slice(2, 8);
+    peer = new Peer(id);
+    peer.on('open', () => {
+      $('link').value = location.origin + location.pathname + '?sala=' + id;
+      show('linkBox');
+      st('🔴 Ao vivo! Mande o link pros seus amigos.');
+    });
+    // Cada amigo abre uma conexão de dados; a gente responde ligando com a tela
+    peer.on('connection', conn => {
+      conn.on('open', () => {
+        const call = peer.call(conn.peer, stream);
+        calls.set(conn.peer, call);
+        contar();
+        setTimeout(() => turbinar(call.peerConnection, motion), 0);
+        const saiu = () => { if (calls.delete(conn.peer)) contar(); };
+        call.on('close', saiu);
+        conn.on('close', saiu);
+      });
+    });
+    peer.on('error', e => {
+      if (e.type === 'unavailable-id') { peer.destroy(); abrirSala(motion); }
+      else st('Erro: ' + e.type);
+    });
+  }
+
+  function parar() {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    if (peer) peer.destroy();
+    stream = peer = null;
+    calls.clear();
+    $('preview').srcObject = null;
+    $('modo').disabled = false;
+    hide('stop', 'count', 'preview', 'linkBox'); show('start');
+    st('Compartilhamento encerrado. Um novo link é gerado na próxima vez.');
+  }
+  $('stop').onclick = parar;
+
+  $('copy').onclick = () => navigator.clipboard.writeText($('link').value).then(() => {
+    $('copy').textContent = 'Copiado!';
+    setTimeout(() => $('copy').textContent = 'Copiar link', 1500);
+  });
+}
+
+// Libera bitrate alto (o padrão do navegador costuma ser baixo e deixa a imagem borrada)
+function turbinar(pc, motion) {
+  if (!pc) return;
+  const aplicar = () => pc.getSenders().forEach(s => {
+    if (!s.track || s.track.kind !== 'video') return;
+    const p = s.getParameters();
+    if (!p.encodings || !p.encodings.length) return;
+    p.encodings[0].maxBitrate = motion ? 8_000_000 : 6_000_000;
+    p.encodings[0].maxFramerate = motion ? 60 : 30;
+    p.degradationPreference = motion ? 'maintain-framerate' : 'maintain-resolution';
+    s.setParameters(p).catch(() => {});
+  });
+  aplicar();
+  pc.addEventListener('connectionstatechange', () => {
+    if (pc.connectionState === 'connected') aplicar();
+  });
+}
+
+/* ---------- Quem assiste ---------- */
+function assistir(sala) {
+  hide('host'); show('viewer');
+  $('sub').textContent = 'Assistindo a tela de um amigo.';
+  const v = $('remote');
+  const st = t => $('viewStatus').textContent = t;
+  const acabou = () => st('A transmissão terminou.');
+
+  const peer = new Peer();
+  peer.on('open', () => {
+    const conn = peer.connect(sala, { reliable: true });
+    conn.on('close', acabou);
+  });
+  peer.on('call', call => {
+    call.answer();
+    call.on('stream', s => {
+      v.srcObject = s;
+      v.play().catch(() => {});
+      st('🔴 Ao vivo — o som começa mudo, clique em "Ativar som".');
+    });
+    call.on('close', acabou);
+  });
+  peer.on('error', e => st(e.type === 'peer-unavailable'
+    ? 'Sala não encontrada — a transmissão acabou ou o link está errado.'
+    : 'Erro: ' + e.type));
+
+  $('sound').onclick = () => {
+    v.muted = !v.muted;
+    $('sound').textContent = v.muted ? '🔊 Ativar som' : '🔇 Mutar';
+  };
+  $('full').onclick = () => v.requestFullscreen && v.requestFullscreen();
+}
+</script>
+</body>
+</html>
