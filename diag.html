@@ -35,11 +35,9 @@ async function testarNat() {
   }).filter(x => x.proto === 'udp');
   log('Candidatos ICE:', cands.length, '| host:', cands.filter(c => / typ host /.test(c)).length, '| srflx (IP público visto pelo STUN):', srflx.length);
   srflx.forEach(x => log('   porta local', x.base, '-> público', x.externo));
-  const porBase = {};
-  srflx.forEach(x => (porBase[x.base] = porBase[x.base] || new Set()).add(x.externo));
-  const simetrico = Object.values(porBase).some(s => s.size > 1);
-  if (!srflx.length) log('NAT: SEM RESPOSTA DO STUN (UDP bloqueado?) -> ligação direta impossível, precisa de TURN');
-  else log('NAT:', simetrico ? 'SIMÉTRICO (cada destino ganha uma porta diferente) -> ligação direta costuma falhar, precisa de TURN' : 'normal (mesma porta para todos os destinos) -> ligação direta costuma funcionar');
+  // O Chrome esconde a porta local (rport 0), então não dá para afirmar o tipo de NAT daqui; só se o STUN respondeu
+  if (!srflx.length) log('STUN: SEM RESPOSTA (UDP bloqueado?) -> ligação direta impossível, precisa de TURN');
+  else log('STUN: respondeu -> a internet deixa sair para ligações diretas');
 }
 
 // Servidor do PeerJS: tempo para abrir e uma ligação completa entre dois "PCs" nesta mesma página
