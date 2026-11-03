@@ -37,7 +37,6 @@
       <option value="motion">Fluidez — jogos e vídeos (60 fps)</option>
       <option value="detail">Nitidez — texto e código (30 fps)</option>
     </select>
-    <label><input type="checkbox" id="audio"> Enviar áudio do PC</label>
     <button id="start">Compartilhar tela</button>
     <button id="swap" class="sec hidden">🔄 Trocar tela</button>
     <button id="stop" class="danger hidden">Parar</button>
@@ -49,6 +48,7 @@
   </div>
   <video id="preview" muted autoplay playsinline class="hidden"></video>
   <div class="status" id="hostStatus">Escolha o modo e clique em compartilhar. Depois é só mandar o link pros seus amigos.</div>
+  <div class="status">🔈 Áudio sem o Discord: escolha uma <b>Aba</b> no seletor (só o som dela vai junto). Na <b>Tela inteira</b>, o áudio do sistema leva tudo do PC, até as vozes do Discord.</div>
 </section>
 
 <!-- Quem assiste -->
@@ -83,7 +83,7 @@ function hospedar() {
     catch (e) { st('Compartilhamento cancelado.'); return; }
 
     $('preview').srcObject = stream;
-    $('modo').disabled = $('audio').disabled = true;
+    $('modo').disabled = true;
     hide('start'); show('swap', 'stop', 'count', 'preview');
     contar();
     st('Abrindo a sala…');
@@ -94,8 +94,8 @@ function hospedar() {
   async function capturar(motion) {
     const s = await navigator.mediaDevices.getDisplayMedia({
       video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: motion ? 60 : 30 } },
-      // Desligado por padrão: o áudio da tela inteira inclui tudo do PC, até a voz do Discord
-      audio: $('audio').checked,
+      audio: true,                   // o próprio seletor tem a chave de ligar/desligar o áudio
+      systemAudio: 'include',
       selfBrowserSurface: 'exclude', // esconde a própria aba do site da lista
       surfaceSwitching: 'include'    // Chrome: botão "compartilhar esta aba" ao trocar de aba
     });
@@ -105,20 +105,25 @@ function hospedar() {
     return s;
   }
 
-  // Troca o que está sendo transmitido sem derrubar quem está assistindo
+  // Liga (ou religa) a tela atual para um amigo; religar permite a nova tela ter ou não áudio
+  function ligar(id) {
+    const call = peer.call(id, stream);
+    const antiga = calls.get(id);
+    calls.set(id, call);
+    antiga?.close();
+    contar();
+    setTimeout(() => turbinar(call.peerConnection, $('modo').value === 'motion'), 0);
+    call.on('close', () => { if (calls.get(id) === call) { calls.delete(id); contar(); } });
+  }
+
+  // Troca o que está sendo transmitido sem o amigo precisar abrir o link de novo
   $('swap').onclick = async () => {
     let novo;
     try { novo = await capturar($('modo').value === 'motion'); } catch (e) { return; }
-    for (const call of calls.values()) {
-      for (const s of call.peerConnection?.getSenders() || []) {
-        const t = s.track && novo.getTracks().find(n => n.kind === s.track.kind);
-        // shortcut: se a 1ª captura não tinha áudio, o áudio da nova não é enviado; resolver com renegociação se fizer falta
-        if (t) s.replaceTrack(t);
-      }
-    }
     stream.getTracks().forEach(t => { t.onended = null; t.stop(); });
     stream = novo;
     $('preview').srcObject = stream;
+    [...calls.keys()].forEach(ligar);
   };
 
   function abrirSala(motion) {
@@ -131,14 +136,10 @@ function hospedar() {
     });
     // Cada amigo abre uma conexão de dados; a gente responde ligando com a tela
     peer.on('connection', conn => {
-      conn.on('open', () => {
-        const call = peer.call(conn.peer, stream);
-        calls.set(conn.peer, call);
-        contar();
-        setTimeout(() => turbinar(call.peerConnection, motion), 0);
-        const saiu = () => { if (calls.delete(conn.peer)) contar(); };
-        call.on('close', saiu);
-        conn.on('close', saiu);
+      conn.on('open', () => ligar(conn.peer));
+      conn.on('close', () => {
+        const c = calls.get(conn.peer);
+        if (c) { calls.delete(conn.peer); contar(); c.close(); }
       });
     });
     peer.on('error', e => {
@@ -153,7 +154,7 @@ function hospedar() {
     stream = peer = null;
     calls.clear();
     $('preview').srcObject = null;
-    $('modo').disabled = $('audio').disabled = false;
+    $('modo').disabled = false;
     hide('swap', 'stop', 'count', 'preview', 'linkBox'); show('start');
     st('Compartilhamento encerrado. Um novo link é gerado na próxima vez.');
   }
@@ -196,14 +197,16 @@ function assistir(sala) {
     const conn = peer.connect(sala, { reliable: true });
     conn.on('close', acabou);
   });
+  let atual = null;
   peer.on('call', call => {
+    atual = call; // ao trocar de tela chega uma ligação nova; a antiga fecha sem encerrar
     call.answer();
     call.on('stream', s => {
       v.srcObject = s;
       v.play().catch(() => {});
       st('🔴 Ao vivo — o som começa mudo, clique em "Ativar som".');
     });
-    call.on('close', acabou);
+    call.on('close', () => { if (atual === call) acabou(); });
   });
   peer.on('error', e => st(e.type === 'peer-unavailable'
     ? 'Sala não encontrada — a transmissão acabou ou o link está errado.'
