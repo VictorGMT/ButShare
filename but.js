@@ -78,7 +78,7 @@
   .but[data-p~=pego] .braco-e{animation:but-agita-e .3s -.15s infinite alternate}
   .but[data-p~=batendo] .abertos{display:none}
   .but[data-p~=batendo] .fechados{display:inline}
-  .but-bum{position:fixed;left:0;top:0;z-index:6;pointer-events:none}
+  .but-bum{position:fixed;left:0;top:0;z-index:6;pointer-events:none;transform-origin:0 0}
 
   @keyframes but-pisca{0%,95%,100%{transform:none}97%{transform:scaleY(.1)}}
   @keyframes but-passo{0%,50%,100%{transform:none}25%{transform:translate(-3px,-7px)}}
@@ -382,40 +382,18 @@
     return () => { cancelAnimationFrame(id); pulo.style.rotate = ''; };
   });
 
-  // Explosão: estrela amarela e vermelha com "BUM!" e um estouro sintetizado (sem arquivo de som)
-  let audio;
-  function bum(x, y) {
-    try {
-      audio ??= new AudioContext(); audio.resume();
-      const t = audio.currentTime, n = audio.sampleRate * .8 | 0;
-      const buf = audio.createBuffer(1, n, audio.sampleRate), d = buf.getChannelData(0);
-      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) ** 3;
-      const ruido = audio.createBufferSource(), filtro = audio.createBiquadFilter(), vol = audio.createGain();
-      ruido.buffer = buf; filtro.type = 'lowpass';
-      filtro.frequency.setValueAtTime(3000, t); filtro.frequency.exponentialRampToValueAtTime(120, t + .7);
-      vol.gain.value = .45;
-      ruido.connect(filtro).connect(vol).connect(audio.destination); ruido.start(t);
-      const grave = audio.createOscillator(), gv = audio.createGain();   // o "tum" por baixo
-      grave.frequency.setValueAtTime(110, t); grave.frequency.exponentialRampToValueAtTime(35, t + .4);
-      gv.gain.setValueAtTime(.6, t); gv.gain.exponentialRampToValueAtTime(.001, t + .5);
-      grave.connect(gv).connect(audio.destination); grave.start(t); grave.stop(t + .5);
-    } catch {}
-    const pts = (r1, r2) => Array.from({ length: 22 }, (_, i) => {
-      const a = i * Math.PI / 11, r = i % 2 ? r1 : r2;
-      return `${50 + r * Math.cos(a)},${50 + r * Math.sin(a)}`;
-    }).join(' ');
-    const b = document.createElement('div');
-    b.className = 'but-bum';
-    b.innerHTML = `<svg viewBox="0 0 100 100" width="160" height="160" stroke="#1a0a0e" stroke-width="3" stroke-linejoin="round">
-      <polygon points="${pts(24, 50)}" fill="#f6c21b"/><polygon points="${pts(14, 32)}" fill="#f21b2d" stroke="none"/>
-      <text x="50" y="57" font-size="20" font-weight="800" text-anchor="middle" fill="#fff" stroke-width="2" paint-order="stroke" font-family="'Comic Sans MS','Segoe Print',cursive">BUM!</text></svg>`;
+  // Explosão: o gif cresce pra cima a partir da base, então gira pra crescer pra dentro da janela,
+  // saindo da parede (ou teto) onde ele bate. Som e gif ficam ao lado do but.js.
+  const GIRO = { e: 90, d: -90, t: 180 };
+  function bum(x, y, lado) {
+    new Audio('explosao.mp3').play().catch(() => {});
+    const b = document.createElement('img');
+    b.className = 'but-bum'; b.alt = '';
+    b.src = 'explosao.gif?' + Date.now();   // url nova a cada vez: o gif recomeça do primeiro quadro
+    // a base da explosão fica em (104, 230) no gif de 208×256
+    b.style.transform = `translate(${x}px,${y}px) rotate(${GIRO[lado]}deg) translate(-104px,-230px)`;
     document.body.append(b);
-    const em = `translate(${x - 80}px,${y - 80}px)`;
-    b.animate([
-      { transform: `${em} scale(.2)`, opacity: 1 },
-      { transform: `${em} scale(1.15) rotate(15deg)`, opacity: 1, offset: .3 },
-      { transform: `${em} scale(1.5) rotate(25deg)`, opacity: 0 }
-    ], { duration: 750, easing: 'ease-out' }).onfinish = () => b.remove();
+    setTimeout(() => b.remove(), 1950);   // duração do gif
   }
 
   // Depois de solto: voa com a velocidade do mouse. Se atravessou uma parede, explode numa outra
@@ -430,7 +408,7 @@
         lado === 'e' ? [0, y + H / 2, -W / 2, y, .5, -.4] :
         lado === 'd' ? [L, y + H / 2, L - W / 2, y, -.5, -.4] :
                        [x + W / 2, 0, x, -H / 2, rand(-.3, .3), .1];
-      bum(bx, by);
+      bum(bx, by, lado);
       pos = { x: px, y: py }; aplica();
       r = await voo(vx, vy, false);
     }
