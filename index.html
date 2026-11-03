@@ -58,6 +58,13 @@
   .esp{flex:1}
   .desmutar{position:absolute;top:12px;left:12px;display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.18);font-size:14px;padding:8px 12px}
   .desmutar:hover{background:rgba(140,26,44,.85)}
+  /* Pop-up de atualização */
+  .update{max-width:420px;text-align:center}
+  .update img{width:60px;height:60px;filter:drop-shadow(0 0 12px rgba(200,20,40,.4))}
+  .update h2{margin:10px 0 4px}
+  .update .row{justify-content:center;margin-top:16px}
+  .barra{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:14px}
+  .barra div{height:100%;width:0;background:var(--acc-hi);transition:width .25s}
   .hidden{display:none!important}
 </style>
 </head>
@@ -104,6 +111,20 @@
   <div class="status" id="viewStatus">Conectando…</div>
 </section>
 
+<!-- Aviso de atualização (só no app) -->
+<div class="modal hidden" id="updateModal">
+  <div class="picker update" role="dialog" aria-modal="true" aria-labelledby="updTitulo">
+    <img src="logo.png" alt="">
+    <h2 id="updTitulo">Tem atualização!</h2>
+    <div class="status" id="updTexto"></div>
+    <div class="barra hidden" id="updBarra"><div id="updProg"></div></div>
+    <div class="row">
+      <button class="sec" id="updDepois">Depois</button>
+      <button id="updOk">Atualizar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Seletor de telas (só no app) -->
 <div class="modal hidden" id="picker">
   <div class="picker" role="dialog" aria-modal="true" aria-label="Escolher o que compartilhar">
@@ -126,6 +147,36 @@ const SITE = 'https://victorgmt.github.io/tela/';     // no app, o link da sala 
 
 const sala = new URLSearchParams(location.search).get('sala');
 if (sala) assistir(sala); else hospedar();
+if (APP && window.kp.aoUpdate) avisoDeUpdate();   // versões antigas do app não têm o atualizador
+
+/* ---------- Pop-up de atualização do app ---------- */
+function avisoDeUpdate() {
+  window.kp.aoUpdate(d => {
+    if (d.estado === 'disponivel') {
+      $('updTexto').textContent = `A versão ${d.versao} do ButShare saiu. Você está na ${d.atual}.`;
+      show('updateModal');
+      $('updOk').focus();
+    }
+    if (d.estado === 'baixando') {
+      $('updProg').style.width = d.pct + '%';
+      $('updTexto').textContent = `Baixando… ${d.pct}%. O ButShare reabre sozinho quando terminar.`;
+    }
+    if (d.estado === 'erro') {
+      $('updTexto').textContent = 'Não deu para atualizar agora: ' + d.msg;
+      hide('updBarra');
+      $('updOk').disabled = false; $('updOk').textContent = 'Tentar de novo';
+      show('updDepois');
+    }
+  });
+  $('updOk').onclick = () => {
+    $('updOk').disabled = true; $('updOk').textContent = 'Atualizando…';
+    hide('updDepois'); show('updBarra');
+    $('updProg').style.width = '0%';
+    $('updTexto').textContent = 'Baixando…';
+    window.kp.atualizar();
+  };
+  $('updDepois').onclick = () => hide('updateModal');
+}
 
 /* ---------- Quem compartilha ---------- */
 function hospedar() {

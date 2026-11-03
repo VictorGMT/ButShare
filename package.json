@@ -1,24 +1,35 @@
 {
   "name": "butshare",
   "productName": "ButShare",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Compartilhar tela com os amigos, sem o áudio do Discord",
   "author": "VictorGMT",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "audiocap": "x86_64-w64-mingw32-g++ -O2 -std=c++17 -static -s -o audiocap/audiocap.exe audiocap/audiocap.cpp -lole32 -luuid",
-    "dist": "electron-builder --win portable --x64"
+    "dist": "electron-builder --win --x64 --publish never",
+    "publicar": "electron-builder --win --x64 --publish always"
   },
   "devDependencies": {
     "electron": "45.2.1",
     "electron-builder": "26.18.0"
   },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  },
   "build": {
     "appId": "io.github.victorgmt.butshare",
     "files": ["main.js", "preload.js", "index.html", "logo.png"],
     "extraResources": [{ "from": "audiocap/audiocap.exe", "to": "audiocap.exe" }],
-    "win": { "target": "portable", "icon": "build/icon.ico", "signExecutable": false },
-    "portable": { "artifactName": "ButShare.exe" }
+    "win": { "target": "nsis", "icon": "build/icon.ico", "signExecutable": false },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "ButShare",
+      "artifactName": "ButShare-Setup.exe"
+    },
+    "publish": [{ "provider": "github", "owner": "VictorGMT", "repo": "tela", "releaseType": "release" }]
   }
 }

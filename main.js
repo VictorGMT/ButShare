@@ -2,6 +2,7 @@
 const { app, BrowserWindow, desktopCapturer, ipcMain, shell } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
+const { autoUpdater } = require('electron-updater');
 
 // A interface vem do site: o que for publicado no GitHub chega pra todo mundo ao abrir o app.
 // Sem internet (ou site fora do ar), usa a cópia que vai dentro do .exe.
@@ -35,7 +36,26 @@ function criarJanela() {
     if (!url.startsWith(SITE)) { e.preventDefault(); shell.openExternal(url); }
   });
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
+  verificarUpdate(win);
 }
+
+// Atualização do app: procura versão nova nos Releases do GitHub e avisa a página (que mostra o pop-up)
+let baixandoUpdate = false;
+function verificarUpdate(win) {
+  if (!app.isPackaged) return;
+  const avisar = d => { if (!win.isDestroyed()) win.webContents.send('update', { ...d, atual: app.getVersion() }); };
+  autoUpdater.autoDownload = false;
+  autoUpdater.on('update-available', info => avisar({ estado: 'disponivel', versao: info.version }));
+  autoUpdater.on('download-progress', p => avisar({ estado: 'baixando', pct: Math.round(p.percent) }));
+  autoUpdater.on('update-downloaded', () => autoUpdater.quitAndInstall(true, true));  // instala calado e reabre
+  // Erro na verificação (ex.: sem internet) fica quieto; só avisa se a pessoa clicou em Atualizar
+  autoUpdater.on('error', err => { if (baixandoUpdate) { baixandoUpdate = false; avisar({ estado: 'erro', msg: err.message }); } });
+  win.webContents.once('did-finish-load', () => autoUpdater.checkForUpdates().catch(() => {}));
+}
+ipcMain.handle('update-baixar', () => {
+  baixandoUpdate = true;
+  autoUpdater.downloadUpdate().catch(() => {});
+});
 
 // Telas e janelas para o seletor, com miniatura
 ipcMain.handle('fontes', async (e) => {
