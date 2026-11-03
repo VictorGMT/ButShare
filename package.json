@@ -22,7 +22,7 @@
   },
   "build": {
     "appId": "io.github.victorgmt.butshare",
-    "files": ["main.js", "preload.js", "discord.js", "index.html", "logo.png", "peerjs.min.js", "audiolinux.js", "jetbrains-mono.woff2"],
+    "files": ["main.js", "preload.js", "discord.js", "index.html", "logo.png", "peerjs.min.js", "but.js", "audiolinux.js", "jetbrains-mono.woff2"],
     "win": {
       "target": "nsis", "icon": "build/icon.ico", "signExecutable": false,
       "extraResources": [{ "from": "audiocap/audiocap.exe", "to": "audiocap.exe" }]

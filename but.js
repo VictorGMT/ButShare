@@ -1,0 +1,426 @@
+// But, o mascote: passeia pela página em volta da tela compartilhada, nunca por cima dela.
+// Desenho em SVG, poses em CSS, deslocamento com Web Animations (nativo do navegador, roda no compositor). Sem biblioteca.
+// Dá pra pegar ele com o mouse e arrastar. Para tirar: apagar este arquivo e a linha <script src="but.js"> do index.html.
+(() => {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const W = 84, H = 98, S = W / 120, PE = 136 * S;   // tamanho na tela; S = escala do desenho (120×140); PE = altura dos pés
+  const ANDA = 0.08, CORRE = 0.3;   // px por ms
+  const COMER = 2400;               // um ciclo da pipoca, igual às animações mao/milho/mastiga
+  const PARA = 'para';              // motivo de interrupção: o espectador pegou o But
+
+  document.head.insertAdjacentHTML('beforeend', `<style>
+  .but{position:fixed;left:0;top:0;width:${W}px;height:${H}px;z-index:5;pointer-events:none;will-change:transform}
+  .but svg{width:100%;height:100%;overflow:visible;display:block}
+  .but .pulo{transition:rotate .15s}
+  .but.dir svg{transform:scaleX(-1)}
+  .but.dir .txt{transform:scaleX(-1);transform-box:fill-box;transform-origin:center}
+  /* só o desenho pega o clique, não o quadrado em volta */
+  .but .tudo{transform-origin:60px 136px;transition:transform .15s;pointer-events:visiblePainted;cursor:grab;touch-action:none}
+  .but-arrastando,.but-arrastando *{cursor:grabbing!important}
+  .but-botao{background:none;padding:8px;border-radius:10px}
+  .but-botao:hover{background:var(--vinho-alto)}
+  .but-botao[aria-pressed=true] .risco{display:none}
+  .but-botao[aria-pressed=false]{color:var(--apagado)}
+  .but .tronco{transform-origin:60px 120px}
+  .but .braco-d{transform-origin:91px 84px;transition:transform .2s}
+  .but .braco-e{transform-origin:17px 82px}
+  .but .perna-e{transform-origin:36px 128px}
+  .but .perna-d{transform-origin:66px 128px}
+  .but .pupila{transition:transform .3s}
+  .but .abertos{transform-box:fill-box;transform-origin:center;animation:but-pisca 4.3s infinite}
+  .but .fechados,.but .feliz,.but .riso,.but .mastiga,.but .balde,.but .milho,.but .costas,.but .palpebra{display:none}
+  .but .fala{position:absolute;left:45%;bottom:92%;font:800 15px/1 'JetBrains Mono',monospace;color:#fff;white-space:nowrap;opacity:0;text-shadow:0 1px 2px #000}
+
+  .but[data-p~=encarando] .pupila,.but[data-p~=pendurado] .pupila{transform:translate(3px,0)}
+  .but[data-p~=olhando] .pupila{transform:translate(-1px,-2.5px)}
+  .but[data-p~=serio] .palpebra{display:inline}
+
+  .but[data-p~=andando] .perna-e{animation:but-passo .5s infinite}
+  .but[data-p~=andando] .perna-d{animation:but-passo .5s -.25s infinite}
+  .but[data-p~=andando] .tronco{animation:but-bob .25s infinite alternate}
+  .but[data-p~=correndo] .perna-e{animation:but-passo .26s infinite}
+  .but[data-p~=correndo] .perna-d{animation:but-passo .26s -.13s infinite}
+  .but[data-p~=correndo] .tronco{animation:but-bob .13s infinite alternate}
+  .but[data-p~=correndo] .tudo{transform:rotate(-9deg)}
+  .but[data-p~=agachado] .tudo{transform:scale(1.12,.84)}
+  .but[data-p~=pulando] .tudo{transform:scale(.92,1.08)}
+  .but[data-p~=pulando] .pernas{transform:translateY(-5px)}
+
+  .but[data-p~=sentado] .tronco{transform:translateY(16px)}
+  .but[data-p~=sentado] .perna-e{transform:translate(-5px,0) rotate(-14deg)}
+  .but[data-p~=sentado] .perna-d{transform:translate(5px,0) rotate(14deg)}
+  .but[data-p~=dormindo] .abertos{display:none}
+  .but[data-p~=dormindo] .fechados{display:inline}
+  .but[data-p~=dormindo] .tudo{animation:but-respira 3s ease-in-out infinite}
+  .but[data-p~=dormindo] .fala{animation:but-sobe 2.4s infinite}
+
+  .but[data-p~=pipoca] .balde,.but[data-p~=pipoca] .milho,.but[data-p~=pipoca] .mastiga{display:inline}
+  .but[data-p~=pipoca] .boca{display:none}
+  .but[data-p~=pipoca] .braco-d{animation:but-mao ${COMER}ms infinite}
+  .but[data-p~=pipoca] .milho{animation:but-milho ${COMER}ms infinite}
+  .but[data-p~=pipoca] .mastiga{transform-box:fill-box;transform-origin:center;animation:but-mastiga ${COMER}ms infinite}
+
+  .but[data-p~=rindo] .abertos,.but[data-p~=rindo] .boca,.but[data-p~=rindo] .mastiga,.but[data-p~=rindo] .milho{display:none}
+  .but[data-p~=rindo] .feliz,.but[data-p~=rindo] .riso{display:inline}
+  .but[data-p~=rindo] .braco-d{animation:none}
+  .but[data-p~=rindo] .tronco{animation:but-ri .18s infinite alternate}
+  .but[data-p~=sentado][data-p~=rindo] .tronco{animation-name:but-ri-sentado}
+
+  /* de costas pra quem assiste, olhando pra cima, pra tela */
+  .but[data-p~=costas] .tronco{display:none}
+  .but[data-p~=costas] .costas{display:inline;transform-origin:53px 124px;animation:but-cima 2.6s ease-in-out infinite alternate}
+
+  .but[data-p~=pendurado] .braco-d{transform:rotate(175deg)}
+  .but[data-p~=pendurado] .tudo{transform-origin:89px 62px;animation:but-balanco 1.6s ease-in-out infinite alternate}
+  .but[data-p~=pendurado] .perna-e,.but[data-p~=pego] .perna-e{transform-origin:40px 104px;animation:but-chute .35s infinite alternate}
+  .but[data-p~=pendurado] .perna-d,.but[data-p~=pego] .perna-d{transform-origin:68px 104px;animation:but-chute .35s -.17s infinite alternate}
+  .but[data-p~=pego] .braco-d{animation:but-agita .3s infinite alternate}
+  .but[data-p~=pego] .braco-e{animation:but-agita-e .3s -.15s infinite alternate}
+
+  @keyframes but-pisca{0%,95%,100%{transform:none}97%{transform:scaleY(.1)}}
+  @keyframes but-passo{0%,50%,100%{transform:none}25%{transform:translate(-3px,-7px)}}
+  @keyframes but-bob{to{transform:translateY(-3px)}}
+  @keyframes but-respira{50%{transform:scale(1.03,.97)}}
+  @keyframes but-ri{from{transform:rotate(-3deg)}to{transform:rotate(3deg) translateY(-2px)}}
+  @keyframes but-ri-sentado{from{transform:translateY(16px) rotate(-3deg)}to{transform:translateY(14px) rotate(3deg)}}
+  @keyframes but-cima{from{transform:rotate(-1deg)}to{transform:rotate(-5deg) translateY(-2px)}}
+  @keyframes but-balanco{from{transform:rotate(-6deg)}to{transform:rotate(6deg)}}
+  @keyframes but-chute{from{transform:rotate(-12deg)}to{transform:rotate(12deg)}}
+  @keyframes but-agita{from{transform:rotate(25deg)}to{transform:rotate(60deg)}}
+  @keyframes but-agita-e{from{transform:rotate(-25deg)}to{transform:rotate(-60deg)}}
+  @keyframes but-sobe{0%{opacity:0;transform:translate(-50%,6px)}25%{opacity:1}100%{opacity:0;transform:translate(-10%,-20px)}}
+  /* pipoca: mexe no balde, leva até a boca, joga o milho, mastiga */
+  @keyframes but-mao{0%,18%,60%,100%{transform:none}9%{transform:rotate(-8deg)}35%,45%{transform:rotate(115deg)}}
+  @keyframes but-milho{0%,34%{opacity:0;transform:translate(71px,73px)}35%{opacity:1;transform:translate(71px,73px)}41%{transform:translate(60px,50px)}47%{opacity:1;transform:translate(52px,70px)}48%,100%{opacity:0;transform:translate(52px,70px)}}
+  @keyframes but-mastiga{0%,40%,50%,64%,78%,92%,100%{transform:scale(1,.4)}45%{transform:scale(1.2,1.6)}57%,71%,85%{transform:none}}
+  </style>`);
+
+  // Desenho (olhando pra esquerda; .dir espelha). Contorno herdado do <g> de fora.
+  document.body.insertAdjacentHTML('beforeend', `<div class="but" id="but" aria-hidden="true" hidden><div class="pulo">
+  <svg viewBox="0 0 120 140"><g class="tudo" stroke="#1a0a0e" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+    <g class="pernas" fill="#7d1027">
+      <g class="perna-e"><rect x="32" y="104" width="16" height="22" rx="4"/><ellipse cx="36" cy="128" rx="13" ry="8"/></g>
+      <g class="perna-d"><rect x="60" y="104" width="16" height="22" rx="4"/><ellipse cx="66" cy="128" rx="13" ry="8"/></g>
+    </g>
+    <g class="tronco">
+      <g class="braco-e"><rect x="10" y="80" width="14" height="22" rx="7" fill="#7d1027"/><circle cx="16" cy="104" r="7" fill="#fbf3ea"/></g>
+      <path d="M86 28 L102 20 V66 L86 76Z" fill="#f2cdb8" stroke="none"/>
+      <path d="M86 76 L102 66 V100 L86 112Z" fill="#5e0b1d" stroke="none"/>
+      <path d="M86 28 L102 20 V100 L86 112" fill="none"/>
+      <rect x="20" y="28" width="66" height="84" rx="3" fill="#7d1027"/>
+      <path d="M22 30 H84 V76 Q53 96 22 76Z" fill="#fbf3ea" stroke="none"/>
+      <path d="M20 74 Q53 98 86 74" fill="none"/>
+      <path d="M30 80 Q53 104 76 80" fill="none" stroke-width="7"/>
+      <path d="M30 80 Q53 104 76 80" fill="none" stroke="#f6c21b" stroke-width="3.5"/>
+      <circle cx="53" cy="100" r="9" fill="#f6c21b" stroke-width="3"/>
+      <text class="txt" x="53" y="104.5" font-size="12" font-weight="800" text-anchor="middle" fill="#1a0a0e" stroke="none" font-family="sans-serif">B</text>
+      <path d="M18 32 Q18 4 54 4 Q88 4 90 30Z" fill="#7d1027"/>
+      <path d="M84 22 Q104 16 110 28 Q98 32 88 31" fill="#7d1027"/>
+      <text class="txt" x="52" y="25" font-size="17" font-weight="700" text-anchor="middle" fill="#fff" stroke="none" font-family="'Comic Sans MS','Segoe Print',cursive">But</text>
+      <g class="abertos">
+        <path d="M30 51 h17 M57 51 h17"/>
+        <rect x="31" y="52" width="14" height="10" rx="5" fill="#fff" stroke-width="3"/>
+        <rect x="58" y="52" width="14" height="10" rx="5" fill="#fff" stroke-width="3"/>
+        <circle class="pupila" cx="34.5" cy="57" r="3.2" fill="#1a0a0e" stroke="none"/>
+        <circle class="pupila" cx="61.5" cy="57" r="3.2" fill="#1a0a0e" stroke="none"/>
+      </g>
+      <g class="palpebra"><path d="M27 48 h23 v7.5 h-23z M54 48 h23 v7.5 h-23z" fill="#fbf3ea" stroke="none"/><path d="M30 55.5 h17 M57 55.5 h17"/></g>
+      <path class="fechados" d="M31 57 q7 5 14 0 M58 57 q7 5 14 0" fill="none" stroke-width="3.5"/>
+      <path class="feliz" d="M31 59 q7 -8 14 0 M58 59 q7 -8 14 0" fill="none" stroke-width="3.5"/>
+      <circle cx="36" cy="66" r="2" fill="#6b4a3a" stroke="none"/>
+      <path class="boca" d="M48 72 h8" stroke-width="3"/>
+      <path class="riso" d="M45 68 h18 q-2 12 -9 12 q-7 0 -9 -12Z" fill="#5a0d1a" stroke-width="3"/>
+      <ellipse class="mastiga" cx="52" cy="72" rx="4" ry="2.5" fill="#5a0d1a" stroke-width="2.5"/>
+      <g class="braco-d"><rect x="84" y="80" width="14" height="24" rx="7" fill="#7d1027"/><circle cx="92" cy="106" r="7" fill="#fbf3ea"/></g>
+      <circle class="milho" r="4.5" fill="#fff6d8" stroke-width="2.5"/>
+      <g class="balde" stroke-width="2.5">
+        <circle cx="79" cy="91" r="6" fill="#fff6d8"/><circle cx="101" cy="91" r="6" fill="#fff6d8"/>
+        <circle cx="87" cy="87" r="6" fill="#fff6d8"/><circle cx="95" cy="86" r="6" fill="#fff6d8"/>
+        <path d="M74 94 H106 L101 120 H79Z" fill="#fff"/>
+        <path d="M81 94 L84 120 M90 94 V120 M99 94 L96 120" stroke="#e01b2f" stroke-width="4" stroke-linecap="butt"/>
+        <path d="M74 94 H106 L101 120 H79Z" fill="none"/>
+      </g>
+    </g>
+    <!-- de costas: reto, sem perspectiva, mesmo tamanho de caixa da frente -->
+    <g class="costas">
+      <rect x="6" y="80" width="14" height="22" rx="7" fill="#7d1027"/><circle cx="13" cy="104" r="7" fill="#fbf3ea"/>
+      <rect x="86" y="80" width="14" height="22" rx="7" fill="#7d1027"/><circle cx="93" cy="104" r="7" fill="#fbf3ea"/>
+      <rect x="20" y="28" width="66" height="84" rx="3" fill="#7d1027"/>
+      <path d="M22 30 H84 V66 Q53 80 22 66Z" fill="#fbf3ea" stroke="none"/>
+      <path d="M20 64 Q53 82 86 64" fill="none"/>
+      <path d="M26 68 Q53 86 80 68" fill="none" stroke-width="6.5"/>
+      <path d="M26 68 Q53 86 80 68" fill="none" stroke="#f6c21b" stroke-width="3"/>
+      <path d="M24 22 Q6 16 0 28 Q12 32 22 31" fill="#7d1027"/>
+      <path d="M18 32 Q18 4 53 4 Q88 4 88 32Z" fill="#7d1027"/>
+      <path d="M42 32 Q53 15 64 32Z" fill="#fbf3ea"/>
+      <path d="M43 26.5 H63" stroke-width="3"/>
+      <circle cx="53" cy="4" r="3" fill="#7d1027" stroke-width="2.5"/>
+    </g>
+  </g></svg><span class="fala"></span></div></div>`);
+
+  const el = document.getElementById('but'), pulo = el.firstElementChild, fala = el.querySelector('.fala');
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const largura = () => document.documentElement.clientWidth;
+  const chao = () => innerHeight - 6 - PE;   // y do boneco com os pés no chão da janela
+  const vira = direita => el.classList.toggle('dir', direita);
+  const poe = (p, txt = '') => { el.dataset.p = p; fala.textContent = txt; };
+  let pos = { x: 0, y: chao() };
+  const aplica = () => el.style.transform = `translate(${pos.x}px,${pos.y}px)`;
+
+  // Tudo que leva tempo passa por aqui: se o espectador pegar o But no meio, a ação para na hora
+  let ctl = new AbortController();
+  function passo(comeca) {
+    const s = ctl.signal;
+    return new Promise((ok, falha) => {
+      if (s.aborted) return falha(PARA);
+      const para = comeca(ok);
+      s.addEventListener('abort', () => { para(); falha(PARA); }, { once: true });
+    });
+  }
+  const espera = ms => passo(ok => { const t = setTimeout(ok, ms); return () => clearTimeout(t); });
+  const anima = (alvo, quadros, opc) => passo(ok => { const a = alvo.animate(quadros, opc); a.onfinish = ok; return () => a.cancel(); });
+
+  // A posição final vai direto pro style; a animação (sem fill) só cobre o caminho até lá
+  function mover(x, y, ms, easing = 'linear') {
+    const de = el.style.transform;
+    pos = { x, y }; aplica();
+    return anima(el, [{ transform: de }, { transform: el.style.transform }], { duration: ms, easing });
+  }
+  function salto(x, y, h, ms) {
+    return Promise.all([anima(pulo, [
+      { transform: 'none', easing: 'cubic-bezier(.33,.66,.66,1)' },
+      { transform: `translateY(${-h}px)`, easing: 'cubic-bezier(.33,0,.66,.33)' },
+      { transform: 'none' }
+    ], ms), mover(x, y, ms)]);
+  }
+  const queda = (y, easing = 'cubic-bezier(.5,0,1,1)') => mover(pos.x, y, Math.max(150, Math.sqrt(Math.max(0, y - pos.y)) * 30), easing);
+
+  // Moldura vermelha em volta da tela compartilhada (o ::before do .visor fica 14 px pra fora)
+  function moldura() {
+    const v = document.querySelector('main:not(.hidden) .visor');
+    if (!v) return null;
+    const r = v.getBoundingClientRect();
+    return { l: r.left - 14, r: r.right + 14, t: r.top - 14, b: r.bottom + 14 };
+  }
+  const bate = (m, x, y) => !!m && x + W > m.l && x < m.r && y + H > m.t && y < m.b;   // o But em (x, y) ficaria por cima da tela?
+  // O salto (linha reta + arco de altura h) passa longe da tela?
+  function livre(m, x0, y0, x1, y1, h) {
+    for (let i = 1; i < 10; i++) { const t = i / 10; if (bate(m, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t - 4 * h * t * (1 - t))) return false; }
+    return true;
+  }
+  // Trechos do chão por onde ele pode andar: se a tela desce até o chão, sobra o lado de cada lado dela
+  function zonas() {
+    const m = moldura(), y = chao(), fim = largura() - W;
+    const zs = m && m.b > y && m.t < y + H ? [[0, m.l - W], [m.r, fim]] : [[0, fim]];
+    return zs.filter(([a, b]) => b - a > 20);
+  }
+  function zona() {
+    const zs = zonas();
+    if (!zs.length) return null;
+    const dist = ([a, b]) => Math.max(a - pos.x, pos.x - b, 0);
+    const z = zs.reduce((m, z) => dist(z) < dist(m) ? z : m);
+    if (dist(z) || pos.y !== chao()) { pos = { x: Math.min(z[1], Math.max(z[0], pos.x)), y: chao() }; aplica(); }
+    return z;
+  }
+  // Linhas de texto da página (fora da tela compartilhada): servem de plataforma
+  function letras() {
+    const linhas = [], r = document.createRange();
+    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode: n => n.data.trim() && !n.parentElement.closest('.visor,.but,.modal,script') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
+    });
+    for (let n; (n = w.nextNode());) { r.selectNodeContents(n); for (const q of r.getClientRects()) if (q.width > W * .5) linhas.push(q); }
+    return linhas;
+  }
+  const praTela = () => { const m = moldura(); if (m) vira((m.l + m.r) / 2 > pos.x + W / 2); };
+  const agacha = async () => { poe('agachado'); await espera(160); };
+  async function ir(x) {
+    const d = Math.abs(x - pos.x);
+    if (d < 5) return;
+    vira(x > pos.x); poe('andando');
+    await mover(x, chao(), d / ANDA);
+  }
+  // De onde estiver (letra, moldura, mão do espectador) até o chão, sem atravessar a tela
+  async function descer(cara = '') {
+    const m = moldura(), fim = largura() - W;
+    poe('pulando ' + cara);
+    if (m && pos.x + W > m.l && pos.x < m.r && pos.y + H <= m.t + 2) {   // está em cima da tela: cai na moldura e pula pro lado
+      if (pos.y < m.t - H - 2) { await queda(m.t - H); await agacha(); }
+      const lados = [m.l - W - 4, m.r + 4].filter(x => x >= 0 && x <= fim).sort((a, b) => Math.abs(a - pos.x) - Math.abs(b - pos.x));
+      if (lados.length) { vira(lados[0] > pos.x); poe('pulando ' + cara); await salto(lados[0], pos.y, 40, 300 + Math.abs(lados[0] - pos.x)); }
+    }
+    poe('pulando ' + cara); await queda(chao());
+    await agacha();
+  }
+
+  /* ---------- O que ele faz ---------- */
+  async function andar(z, rapido) {
+    const x = rand(z[0], z[1]), d = Math.abs(x - pos.x);
+    if (d < 30) return;
+    vira(x > pos.x); poe(rapido ? 'correndo' : 'andando');
+    await mover(x, chao(), d / (rapido ? CORRE : ANDA));
+  }
+  async function pular(z) {
+    const x = Math.min(z[1], Math.max(z[0], pos.x + rand(-100, 100)));
+    vira(x > pos.x);
+    await agacha();
+    poe('pulando'); await salto(x, chao(), rand(60, 120), 650);
+    await agacha();
+  }
+  // Pula e fica pendurado num canto de baixo da moldura, balançando as pernas e encarando quem assiste
+  async function agarrar(z) {
+    const m = moldura();
+    if (!m) return andar(z);
+    const esq = Math.random() < .5;
+    // a mão do braço erguido fica em (89, 62) no desenho; espelhado, em (31, 62)
+    const x = esq ? m.l - 2 - 89 * S : m.r + 2 - 31 * S, y = m.b - 2 - 62 * S;
+    const ax = Math.min(z[1], Math.max(z[0], esq ? x - 80 : x + 80));   // pega impulso por fora da tela; longe = está do outro lado dela
+    const subida = chao() - y, noChao = n => zonas().some(([a, b]) => n >= a && n <= b);
+    if (subida < 15 || subida > 360 || !noChao(x) || Math.abs(ax - x) > 120) return andar(z);
+    await ir(ax);
+    vira(!esq);
+    await agacha();
+    poe('pulando'); await salto(x, y, 50, 600);
+    poe('pendurado'); await espera(rand(3000, 7000));
+    await descer();
+  }
+  // Sobe numa linha de texto da página, anda um pouco por ela, faz alguma coisa lá em cima e desce
+  async function subir(z) {
+    const m = moldura(), y0 = chao(), fim = largura() - W;
+    const naLinha = q => Math.min(fim, Math.max(0, rand(q.left - W * .3, q.right - W * .7)));
+    for (const q of letras().sort(() => Math.random() - .5)) {
+      const y = q.top + q.height * .15 - PE, x = naLinha(q);
+      if (y < 0 || y0 - y < 40 || bate(m, x, y)) continue;
+      const saidas = [x, m ? m.l - W - 10 : x, m ? m.r + 10 : x].map(a => Math.min(z[1], Math.max(z[0], a)));
+      for (const ax of saidas) for (const h of [50, 120, 220, 340]) {
+        if (!livre(m, ax, y0, x, y, h)) continue;
+        await ir(ax);
+        vira(x > pos.x); await agacha();
+        poe('pulando'); await salto(x, y, h, 450 + (y0 - y + h) * .8);
+        await agacha();
+        const fx = naLinha(q);
+        if (Math.abs(fx - pos.x) > 30 && !bate(m, fx, y)) { vira(fx > pos.x); poe('andando'); await mover(fx, y, Math.abs(fx - pos.x) / ANDA); }
+        await [olhar, encarar, sentar, costas, rir][Math.floor(Math.random() * 5)]();
+        return descer();
+      }
+    }
+    return andar(z);
+  }
+  const parado = (p, a, b, txt) => { poe(p, txt); return espera(rand(a, b)); };
+  const encarar = () => parado('encarando', 2500, 5000);
+  const olhar = () => { praTela(); return parado('olhando', 3000, 7000); };
+  const costas = () => { praTela(); return parado('costas', 4000, 9000); };
+  const rir = () => { praTela(); return parado('rindo', 2500, 4500); };
+  const sentar = () => { if (Math.random() < .6) praTela(); return parado(Math.random() < .5 ? 'sentado olhando' : 'sentado', 5000, 10000); };
+  async function dormir() {
+    await parado('sentado dormindo', 8000, 16000, 'zZ');
+    await parado('sentado encarando', 900, 1500);
+  }
+  // Pega uma pipoca por vez; no fim de cada uma decide se continua (no mínimo duas). De vez em quando ri da tela.
+  async function pipoca() {
+    praTela();
+    const base = Math.random() < .5 ? 'sentado ' : '';
+    let n = 0;
+    do {
+      if (n && Math.random() < .15) await parado(base + 'pipoca rindo', 1500, 1500);
+      poe(base + 'pipoca olhando'); await espera(COMER); n++;
+    } while (n < 2 || Math.random() < .75);
+  }
+  // Depois de solto: cai e encara quem pegou ele, com a cara séria
+  async function cair() {
+    await descer('serio');
+    await parado('serio encarando', 1200, 2200);
+  }
+
+  const ACOES = [[andar, 26], [z => andar(z, true), 7], [pular, 7], [agarrar, 6], [subir, 9], [encarar, 7], [olhar, 10], [costas, 7], [rir, 7], [sentar, 7], [dormir, 4], [pipoca, 9]];
+  const TOTAL = ACOES.reduce((s, [, p]) => s + p, 0);
+  function sorteia() { let n = Math.random() * TOTAL; for (const [f, p] of ACOES) if ((n -= p) < 0) return f; return andar; }
+
+  /* ---------- Pegar e arrastar ---------- */
+  let preso = null, solta = null, caiu = false;
+  // Arrastando, ele não entra na tela compartilhada: é empurrado pra beirada mais perto
+  function afasta(x, y) {
+    const m = moldura(), fim = largura() - W;
+    x = Math.min(fim, Math.max(0, x)); y = Math.min(chao(), Math.max(0, y));
+    if (!bate(m, x, y)) return [x, y];
+    const ops = [[m.l - W, y], [m.r, y], [x, m.t - H], [x, m.b]];
+    const ok = ops.filter(([a, b]) => a >= 0 && a <= fim && b >= 0 && b <= chao());
+    const d = ([a, b]) => Math.hypot(a - x, b - y);
+    return (ok.length ? ok : ops).reduce((p, q) => d(q) < d(p) ? q : p);
+  }
+  el.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || preso) return;
+    e.preventDefault();
+    const r = pulo.getBoundingClientRect();   // onde ele está agora, mesmo no meio de um pulo
+    pos = { x: r.left, y: r.top };
+    preso = new Promise(ok => solta = ok); caiu = true;
+    ctl.abort(); aplica();
+    const ox = e.clientX - pos.x, oy = e.clientY - pos.y;
+    pulo.style.transformOrigin = `${ox}px ${oy}px`;   // balança pendurado pelo ponto onde foi pego
+    poe('pego serio');
+    document.documentElement.classList.add('but-arrastando');
+    let antes = e.clientX, volta;
+    const move = e => {
+      [pos.x, pos.y] = afasta(e.clientX - ox, e.clientY - oy); aplica();
+      pulo.style.rotate = Math.max(-35, Math.min(35, (e.clientX - antes) * 2.5)) + 'deg';
+      antes = e.clientX;
+      clearTimeout(volta); volta = setTimeout(() => pulo.style.rotate = '', 120);
+    };
+    const fim = () => {
+      removeEventListener('pointermove', move); removeEventListener('pointerup', fim); removeEventListener('pointercancel', fim);
+      clearTimeout(volta); pulo.style.rotate = '';
+      document.documentElement.classList.remove('but-arrastando');
+      preso = null; solta();
+    };
+    addEventListener('pointermove', move); addEventListener('pointerup', fim); addEventListener('pointercancel', fim);
+  });
+
+  // Botão na barra de cima para ligar/desligar o But; a escolha fica guardada neste navegador
+  let ligado = true;
+  try { ligado = localStorage.getItem('but') !== '0'; } catch {}
+  const botao = document.createElement('button');
+  botao.className = 'but-botao';
+  botao.innerHTML = `<svg class="ic" viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M5 9a7 6 0 0 1 14 0z" fill="currentColor"/><path d="M18 8.5h3"/><rect x="5" y="9" width="14" height="12" rx="1.5"/>
+    <path d="M8.5 13.5h2M13.5 13.5h2M11 17.5h2"/><path class="risco" d="M3 3l18 18"/></svg>`;
+  const marca = () => {
+    botao.setAttribute('aria-pressed', ligado);
+    botao.title = ligado ? 'Esconder o But' : 'Mostrar o But';
+    botao.setAttribute('aria-label', botao.title);
+  };
+  botao.onclick = () => {
+    ligado = !ligado; marca();
+    try { localStorage.setItem('but', ligado ? '1' : '0'); } catch {}
+    if (!ligado) { el.hidden = true; ctl.abort(); }   // para no meio do que estiver fazendo
+    checa();
+  };
+  marca();
+  document.querySelector('.direita')?.append(botao);
+
+  // Some (e para de decidir coisas) desligado, em tela cheia ou com a aba escondida
+  const visivel = () => ligado && !document.hidden && !document.fullscreenElement;
+  let acordar = null;
+  function checa() {
+    if (!visivel()) el.hidden = true;
+    else if (acordar) { acordar(); acordar = null; }
+  }
+  document.addEventListener('visibilitychange', checa);
+  document.addEventListener('fullscreenchange', checa);
+  addEventListener('resize', () => { if (!preso) { pos.y = chao(); aplica(); } });
+
+  (async () => {
+    const z = zona();
+    if (z) { pos.x = rand(z[0], z[1]); aplica(); }
+    for (;;) {
+      if (!visivel()) await new Promise(r => acordar = r);
+      if (preso) await preso;
+      ctl = new AbortController();
+      try {
+        if (caiu) { caiu = false; await cair(); }
+        const z = zona();
+        el.hidden = !z;   // janela estreita demais: nem aparece
+        if (z) { await sorteia()(z); poe(''); }
+        await espera(rand(800, 2500));
+      } catch (e) { if (e !== PARA) throw e; }
+    }
+  })();
+})();
