@@ -55,7 +55,8 @@
   .player:fullscreen video{max-height:none;height:100vh}
   .player:not(.ativo){cursor:none}
   .controles{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:6px;padding:36px 12px 10px;background:linear-gradient(transparent,rgba(0,0,0,.8));opacity:0;transition:opacity .2s}
-  .player.ativo .controles,.controles:focus-within{opacity:1}
+  /* :focus-visible = só foco pelo teclado; clicar num botão não deixa os controles presos na tela */
+  .player.ativo .controles,.controles:has(:focus-visible){opacity:1}
   .controles button{background:none;color:#fff;padding:6px;border-radius:8px;display:flex}
   .controles button:hover{background:rgba(255,255,255,.14)}
   .controles input[type=range]{width:130px;accent-color:#fff;cursor:pointer}
