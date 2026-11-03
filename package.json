@@ -1,7 +1,7 @@
 {
   "name": "butshare",
   "productName": "ButShare",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Compartilhar tela com os amigos, sem o áudio do Discord",
   "author": "VictorGMT",
   "main": "main.js",
