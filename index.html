@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tela Compartilhada</title>
+<title>KP-TELA</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
   :root{--bg:#0f1115;--card:#181b22;--fg:#e8eaf0;--mut:#9aa1b2;--acc:#5b8cff;--err:#ff6b6b;--line:#2a2f3a}
@@ -27,7 +27,7 @@
 </style>
 </head>
 <body>
-<h1>📺 Tela Compartilhada</h1>
+<h1>📺 KP-TELA</h1>
 <div class="status" id="sub"></div>
 
 <!-- Quem compartilha -->
@@ -37,7 +37,9 @@
       <option value="motion">Fluidez — jogos e vídeos (60 fps)</option>
       <option value="detail">Nitidez — texto e código (30 fps)</option>
     </select>
+    <label><input type="checkbox" id="audio"> Enviar áudio do PC</label>
     <button id="start">Compartilhar tela</button>
+    <button id="swap" class="sec hidden">🔄 Trocar tela</button>
     <button id="stop" class="danger hidden">Parar</button>
     <span class="badge hidden" id="count">0 assistindo</span>
   </div>
@@ -77,23 +79,46 @@ function hospedar() {
 
   $('start').onclick = async () => {
     const motion = $('modo').value === 'motion';
-    try {
-      stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: motion ? 60 : 30 } },
-        audio: true
-      });
-    } catch (e) { st('Compartilhamento cancelado.'); return; }
-
-    const vt = stream.getVideoTracks()[0];
-    vt.contentHint = motion ? 'motion' : 'detail';
-    vt.onended = parar;
+    try { stream = await capturar(motion); }
+    catch (e) { st('Compartilhamento cancelado.'); return; }
 
     $('preview').srcObject = stream;
-    $('modo').disabled = true;
-    hide('start'); show('stop', 'count', 'preview');
+    $('modo').disabled = $('audio').disabled = true;
+    hide('start'); show('swap', 'stop', 'count', 'preview');
     contar();
     st('Abrindo a sala…');
     abrirSala(motion);
+  };
+
+  // Abre o seletor do navegador: tela inteira, janela ou aba (com miniaturas)
+  async function capturar(motion) {
+    const s = await navigator.mediaDevices.getDisplayMedia({
+      video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: motion ? 60 : 30 } },
+      // Desligado por padrão: o áudio da tela inteira inclui tudo do PC, até a voz do Discord
+      audio: $('audio').checked,
+      selfBrowserSurface: 'exclude', // esconde a própria aba do site da lista
+      surfaceSwitching: 'include'    // Chrome: botão "compartilhar esta aba" ao trocar de aba
+    });
+    const vt = s.getVideoTracks()[0];
+    vt.contentHint = motion ? 'motion' : 'detail';
+    vt.onended = parar;
+    return s;
+  }
+
+  // Troca o que está sendo transmitido sem derrubar quem está assistindo
+  $('swap').onclick = async () => {
+    let novo;
+    try { novo = await capturar($('modo').value === 'motion'); } catch (e) { return; }
+    for (const call of calls.values()) {
+      for (const s of call.peerConnection?.getSenders() || []) {
+        const t = s.track && novo.getTracks().find(n => n.kind === s.track.kind);
+        // shortcut: se a 1ª captura não tinha áudio, o áudio da nova não é enviado; resolver com renegociação se fizer falta
+        if (t) s.replaceTrack(t);
+      }
+    }
+    stream.getTracks().forEach(t => { t.onended = null; t.stop(); });
+    stream = novo;
+    $('preview').srcObject = stream;
   };
 
   function abrirSala(motion) {
@@ -128,8 +153,8 @@ function hospedar() {
     stream = peer = null;
     calls.clear();
     $('preview').srcObject = null;
-    $('modo').disabled = false;
-    hide('stop', 'count', 'preview', 'linkBox'); show('start');
+    $('modo').disabled = $('audio').disabled = false;
+    hide('swap', 'stop', 'count', 'preview', 'linkBox'); show('start');
     st('Compartilhamento encerrado. Um novo link é gerado na próxima vez.');
   }
   $('stop').onclick = parar;
