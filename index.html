@@ -154,6 +154,9 @@ const SITE = 'https://victorgmt.github.io/tela/';     // no app, o link da sala 
 // Coloca o ícone (Lucide) na frente de todo elemento com data-i
 document.querySelectorAll('[data-i]').forEach(e => e.insertAdjacentHTML('afterbegin', icone(e.dataset.i, 18)));
 
+const ERROS_DE_REDE = ['network', 'server-error', 'socket-error', 'socket-closed'];   // erros do PeerJS que valem nova tentativa
+const TENTATIVAS = 6;   // novas tentativas, a cada 3 s, antes de desistir
+
 const sala = new URLSearchParams(location.search).get('sala');
 if (sala) assistir(sala); else hospedar();
 if (APP && window.kp.aoUpdate) avisoDeUpdate();   // versões antigas do app não têm o atualizador
@@ -255,30 +258,56 @@ function hospedar() {
     [...calls.keys()].forEach(ligar);
   };
 
+  // O servidor gratuito do PeerJS às vezes trava; se a sala não abrir em 10 s, tenta de novo
+  let timerSala = null, tentativasSala = 0;
   function abrirSala(motion) {
     const id = 'tela-' + Math.random().toString(36).slice(2, 8);
-    peer = new Peer(id);
-    peer.on('open', () => {
+    const p = peer = new Peer(id);
+    clearTimeout(timerSala);
+    timerSala = setTimeout(() => salaDemorou(motion), 10000);
+    p.on('open', () => {
+      if (peer !== p) return;
+      clearTimeout(timerSala); tentativasSala = 0;
       $('link').value = (APP ? SITE : location.origin + location.pathname) + '?sala=' + id;
       show('linkBox');
       st('');
       presenca();
     });
+    // Caiu a ligação com o servidor depois de aberta: reconecta com o mesmo link
+    p.on('disconnected', () => setTimeout(() => {
+      if (peer === p && stream && !p.destroyed && p.disconnected) p.reconnect();
+    }, 3000));
     // Cada amigo abre uma conexão de dados; a gente responde ligando com a tela
-    peer.on('connection', conn => {
+    p.on('connection', conn => {
       conn.on('open', () => ligar(conn.peer));
       conn.on('close', () => {
         const c = calls.get(conn.peer);
         if (c) { calls.delete(conn.peer); contar(); c.close(); }
       });
     });
-    peer.on('error', e => {
-      if (e.type === 'unavailable-id') { peer.destroy(); abrirSala(motion); }
+    p.on('error', e => {
+      if (peer !== p) return;
+      if (e.type === 'unavailable-id') { p.destroy(); abrirSala(motion); }
+      else if (ERROS_DE_REDE.includes(e.type) || e.type === 'disconnected') {
+        if ($('linkBox').classList.contains('hidden')) salaDemorou(motion);
+        else st('A conexão com o servidor caiu, reconectando… (quem já está assistindo continua vendo)');
+      }
       else st('Erro: ' + e.type);
     });
   }
+  function salaDemorou(motion) {
+    clearTimeout(timerSala);
+    if (!stream || !peer) return;   // já clicou em Parar, ou já tem uma nova tentativa agendada
+    peer.destroy();
+    peer = null;                    // eventos atrasados da tentativa antiga passam a ser ignorados
+    if (tentativasSala >= TENTATIVAS) { st('O servidor de conexão não respondeu. Clique em Parar e tente de novo daqui a pouco.'); return; }
+    tentativasSala++;
+    st(`O servidor está demorando, tentando de novo (${tentativasSala}/${TENTATIVAS})…`);
+    timerSala = setTimeout(() => { if (stream) abrirSala(motion); }, 3000);
+  }
 
   function parar() {
+    clearTimeout(timerSala); tentativasSala = 0;
     pararAudio();
     if (stream) stream.getTracks().forEach(t => t.stop());
     if (peer) peer.destroy();
@@ -414,27 +443,59 @@ function assistir(sala) {
   const st = t => $('viewStatus').textContent = t;
   const acabou = () => st('A transmissão terminou.');
 
-  const peer = new Peer();
-  peer.on('open', () => {
-    const conn = peer.connect(sala, { reliable: true });
-    conn.on('close', acabou);
-  });
-  let atual = null;
-  peer.on('call', call => {
-    atual = call; // ao trocar de tela chega uma ligação nova; a antiga fecha sem encerrar
-    call.answer();
-    call.on('stream', s => {
-      v.srcObject = s;
-      v.play().catch(() => {});
-      st('');
-      if (ctx) ligarAudio();   // trocou de tela: liga o som da nova
-      atualizar();
+  // Conecta em etapas, mostrando onde está; se travar 10 s, tenta de novo (até 3 vezes)
+  let peer = null, etapa = '', tentativas = 0, timer = null, atual = null;
+  function conectar() {
+    const p = peer = new Peer();
+    const minha = () => peer === p;   // ignora eventos de tentativas antigas
+    etapa = 'servidor';
+    if (!tentativas) st('Conectando ao servidor…');
+    clearTimeout(timer); timer = setTimeout(travou, 10000);
+    p.on('open', () => {
+      if (!minha()) return;
+      etapa = 'but'; st('Achando a tela do but…');
+      const conn = p.connect(sala, { reliable: true });
+      conn.on('open', () => { if (minha()) { etapa = 'video'; st('Conectado, carregando a tela…'); } });
+      conn.on('close', () => { if (minha()) { etapa = 'fim'; acabou(); } });
     });
-    call.on('close', () => { if (atual === call) acabou(); });
-  });
-  peer.on('error', e => st(e.type === 'peer-unavailable'
-    ? 'Sala não encontrada — a transmissão acabou ou o link está errado.'
-    : 'Erro: ' + e.type));
+    p.on('call', call => {
+      atual = call; // ao trocar de tela chega uma ligação nova; a antiga fecha sem encerrar
+      call.answer();
+      call.on('stream', s => {
+        if (!minha()) return;
+        clearTimeout(timer); etapa = 'ok';
+        v.srcObject = s;
+        v.play().catch(() => {});
+        st('');
+        if (ctx) ligarAudio();   // trocou de tela: liga o som da nova
+        atualizar();
+      });
+      call.on('close', () => { if (minha() && atual === call) acabou(); });
+    });
+    p.on('error', e => {
+      if (!minha()) return;
+      if (e.type === 'peer-unavailable') { clearTimeout(timer); etapa = 'fim'; st('Sala não encontrada — a transmissão acabou ou o link está errado.'); }
+      else if (ERROS_DE_REDE.includes(e.type) && etapa !== 'ok') travou();
+      else st('Erro: ' + e.type);
+    });
+  }
+  function travou() {
+    clearTimeout(timer);
+    if (etapa === 'ok' || etapa === 'fim' || etapa === 'esperando') return;
+    if (tentativas < TENTATIVAS) {
+      tentativas++;
+      peer.destroy();
+      peer = null;   // eventos atrasados da tentativa antiga passam a ser ignorados
+      etapa = 'esperando';
+      st(`Demorou, tentando de novo (${tentativas}/${TENTATIVAS})…`);
+      timer = setTimeout(conectar, 3000);
+      return;
+    }
+    st(etapa === 'servidor'
+      ? 'O servidor de conexão não respondeu. Tente de novo daqui a pouco (F5).'
+      : 'Não deu para ligar direto com o PC do but. A internet de um de vocês pode estar bloqueando a conexão.');
+  }
+  conectar();
 
   // Som: o <video> fica mudo e o áudio passa por um ganho (Web Audio), que permite até 200%
   let ctx = null, ganho = null, fonte = null, mudo = true;
