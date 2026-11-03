@@ -7,6 +7,9 @@ const path = require('path');
 // Sem internet (ou site fora do ar), usa a cópia que vai dentro do .exe.
 const SITE = 'https://victorgmt.github.io/tela/';
 
+// Pede ao Windows para não desenhar a borda amarela em volta da tela capturada (vale no Windows 11)
+app.commandLine.appendSwitch('disable-features', 'WebRtcWgcRequireBorder');
+
 let cap = null;
 
 function pararAudio() {
