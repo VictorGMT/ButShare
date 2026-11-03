@@ -3,6 +3,10 @@ const { app, BrowserWindow, desktopCapturer, ipcMain, shell } = require('electro
 const { spawn } = require('child_process');
 const path = require('path');
 
+// A interface vem do site: o que for publicado no GitHub chega pra todo mundo ao abrir o app.
+// Sem internet (ou site fora do ar), usa a cópia que vai dentro do .exe.
+const SITE = 'https://victorgmt.github.io/tela/';
+
 let cap = null;
 
 function pararAudio() {
@@ -18,8 +22,14 @@ function criarJanela() {
     autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js') }
   });
-  win.loadFile('index.html');
-  // Links (ex.: o link da sala) abrem no navegador padrão
+  win.loadURL(SITE, { extraHeaders: 'Cache-Control: no-cache\n' });
+  win.webContents.on('did-fail-load', (_e, codigo, _desc, url, principal) => {
+    if (principal && codigo !== -3 && url.startsWith(SITE)) win.loadFile('index.html');  // -3 = navegação cancelada
+  });
+  // A janela só mostra o próprio site; qualquer outro link abre no navegador padrão
+  win.webContents.on('will-navigate', (e, url) => {
+    if (!url.startsWith(SITE)) { e.preventDefault(); shell.openExternal(url); }
+  });
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
 }
 

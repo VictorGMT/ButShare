@@ -1,7 +1,7 @@
 {
   "name": "kp-tela",
   "productName": "KP-TELA",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Compartilhar tela com os amigos, sem o áudio do Discord",
   "author": "VictorGMT",
   "main": "main.js",
