@@ -486,8 +486,9 @@ function assistir(sala) {
       tentativas++;
       peer.destroy();
       peer = null;   // eventos atrasados da tentativa antiga passam a ser ignorados
+      const onde = etapa === 'servidor' ? 'falar com o servidor' : 'ligar com o PC do but';
       etapa = 'esperando';
-      st(`Demorou, tentando de novo (${tentativas}/${TENTATIVAS})…`);
+      st(`Demorou para ${onde}, tentando de novo (${tentativas}/${TENTATIVAS})…`);
       timer = setTimeout(conectar, 3000);
       return;
     }
