@@ -4,10 +4,11 @@ const { spawn } = require('child_process');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
 const discord = require('./discord');
+const audioLinux = require('./audiolinux');
 
 // A interface vem do site: o que for publicado no GitHub chega pra todo mundo ao abrir o app.
 // Sem internet (ou site fora do ar), usa a cópia que vai dentro do .exe.
-const SITE = 'https://victorgmt.github.io/tela/';
+const SITE = 'https://victorgmt.github.io/ButShare/';
 
 // Pede ao Windows para não desenhar a borda amarela em volta da tela capturada (vale no Windows 11)
 app.commandLine.appendSwitch('disable-features', 'WebRtcWgcRequireBorder');
@@ -64,7 +65,7 @@ function criarJanela() {
     height: 780,
     title: 'ButShare',
     icon: path.join(__dirname, 'logo.png'),
-    backgroundColor: '#110a0c',
+    backgroundColor: '#2b0e16',
     autoHideMenuBar: true,
     // Já são o padrão do Electron; ficam escritos para não sumirem se o padrão mudar
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true, nodeIntegration: false }
@@ -72,6 +73,10 @@ function criarJanela() {
   win.loadURL(SITE, { extraHeaders: 'Cache-Control: no-cache\n' });
   win.webContents.on('did-fail-load', (_e, codigo, _desc, url, principal) => {
     if (principal && codigo !== -3 && url.startsWith(SITE)) win.loadFile('index.html');  // -3 = navegação cancelada
+  });
+  // Site respondeu com erro (ex.: 404 se o endereço mudar): também usa a cópia de dentro do app
+  win.webContents.on('did-navigate', (_e, url, status) => {
+    if (status >= 400 && url.startsWith(SITE)) win.loadFile('index.html');
   });
   // A janela só mostra o próprio site; qualquer outro link abre no navegador padrão
   win.webContents.on('will-navigate', (e, url) => {
@@ -84,23 +89,31 @@ function criarJanela() {
   verificarUpdate(win);
 }
 
-// Atualização do app: procura versão nova nos Releases do GitHub e avisa a página (que mostra o pop-up)
-let baixandoUpdate = false;
+// Atualização do app: procura versão nova nos Releases do GitHub e avisa a página (o sino da barra de cima).
+// Nada é baixado nem instalado sem a pessoa clicar: Baixar, e depois Instalar agora.
+let avisarErro = false;   // erro só aparece se a pessoa pediu (clicou no sino ou em Baixar); o automático fica quieto
 function verificarUpdate(win) {
   if (!app.isPackaged) return;
   const avisar = d => { if (!win.isDestroyed()) win.webContents.send('update', { ...d, atual: app.getVersion() }); };
   autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;   // baixou e escolheu "Depois": instala quando o app fechar
   autoUpdater.on('update-available', info => avisar({ estado: 'disponivel', versao: info.version }));
+  autoUpdater.on('update-not-available', () => avisar({ estado: 'em-dia' }));
   autoUpdater.on('download-progress', p => avisar({ estado: 'baixando', pct: Math.round(p.percent) }));
-  autoUpdater.on('update-downloaded', () => autoUpdater.quitAndInstall(true, true));  // instala calado e reabre
-  // Erro na verificação (ex.: sem internet) fica quieto; só avisa se a pessoa clicou em Atualizar
-  autoUpdater.on('error', err => { if (baixandoUpdate) { baixandoUpdate = false; avisar({ estado: 'erro', msg: err.message }); } });
+  autoUpdater.on('update-downloaded', info => avisar({ estado: 'pronto', versao: info.version }));
+  autoUpdater.on('error', err => { if (avisarErro) { avisarErro = false; avisar({ estado: 'erro', msg: err.message }); } });
   win.webContents.once('did-finish-load', () => autoUpdater.checkForUpdates().catch(() => {}));
 }
+ipcMain.handle('update-verificar', () => {
+  if (!app.isPackaged) return { estado: 'em-dia', atual: app.getVersion() };   // rodando pelo npm start
+  avisarErro = true;
+  autoUpdater.checkForUpdates().catch(() => {});
+});
 ipcMain.handle('update-baixar', () => {
-  baixandoUpdate = true;
+  avisarErro = true;
   autoUpdater.downloadUpdate().catch(() => {});
 });
+ipcMain.handle('update-instalar', () => autoUpdater.quitAndInstall(true, true));   // fecha, instala calado e reabre
 
 // Telas e janelas para o seletor, com miniatura
 ipcMain.handle('fontes', async (e) => {
@@ -120,12 +133,13 @@ ipcMain.handle('usar-fonte', (_e, id) => {
   return !!fonteEscolhida;
 });
 
-// Áudio do PC sem o Discord: o audiocap.exe escreve PCM 16-bit 48 kHz estéreo no stdout
+// Áudio do PC sem o Discord: o audiocap.exe (Linux: pw-record, ver audiolinux.js) escreve PCM 16-bit 48 kHz estéreo no stdout
 ipcMain.handle('audio-iniciar', (e) => {
   if (!interagiuAgora()) throw new Error('áudio só começa junto com um compartilhamento escolhido por clique');
   pararAudio();
   const exe = path.join(app.isPackaged ? process.resourcesPath : path.join(__dirname, 'audiocap'), 'audiocap.exe');
-  const proc = spawn(exe, [], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  const proc = process.platform === 'linux' ? audioLinux.iniciar()
+    : spawn(exe, [], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   cap = proc;
   let resto = Buffer.alloc(0);
   proc.stdout.on('data', d => {

@@ -2,8 +2,8 @@
 
 Compartilhar a tela com os amigos, com qualidade e sem o áudio do Discord.
 
-- **Site:** https://victorgmt.github.io/tela (dá para compartilhar e assistir pelo navegador)
-- **App para Windows:** página de [Releases](https://github.com/VictorGMT/tela/releases). Baixe **só daqui**.
+- **Site:** https://victorgmt.github.io/ButShare (dá para compartilhar e assistir pelo navegador)
+- **App para Windows e Linux:** página de [Releases](https://github.com/VictorGMT/ButShare/releases). Baixe **só daqui**.
 
 ## Como funciona
 
@@ -11,6 +11,7 @@ Compartilhar a tela com os amigos, com qualidade e sem o áudio do Discord.
 - O servidor gratuito do [PeerJS](https://peerjs.com) só apresenta um PC ao outro; ele não vê a tela.
 - O app (Electron) carrega a interface do site, então mudanças no `index.html` chegam para todos sem reinstalar.
 - `audiocap/` é um programinha em C++ que captura o áudio do PC **menos o Discord** (Windows 10 2004+).
+  No Linux quem faz isso é o `audiolinux.js`, com o PipeWire (`pw-record` + `pw-link`).
 - `discord.js` mostra "Compartilhando a tela" no perfil do Discord. **Sem o link da sala**: o status é público.
 
 ## Segurança (não remover)
@@ -24,17 +25,17 @@ Compartilhar a tela com os amigos, com qualidade e sem o áudio do Discord.
 
 ## Lançar uma versão nova do app
 
-Só precisa quando muda `main.js`, `preload.js`, `discord.js` ou o `audiocap`. Mudanças só no `index.html` não precisam.
+Só precisa quando muda `main.js`, `preload.js`, `discord.js`, `audiolinux.js` ou o `audiocap`. Mudanças só no `index.html` não precisam.
 
 1. Suba o número em `package.json` (`"version"`). **Sem isso o aviso de atualização não aparece.**
 2. `npm install`
 3. `npm test`
 4. `npm run audiocap` (precisa do `x86_64-w64-mingw32-g++`)
-5. `npm run dist` (no Linux, precisa do Wine com 32 bits)
-6. Instale `dist/ButShare-Setup.exe` e teste: compartilhar, trocar tela, áudio.
+5. `npm run dist` (no Linux, precisa do Wine com 32 bits) e `npm run dist:linux`
+6. Instale `dist/ButShare-Setup.exe` e rode `dist/ButShare.AppImage`, e teste: compartilhar, trocar tela, áudio.
 7. No GitHub: **Releases → Draft a new release**, tag `vX.Y.Z`, envie `ButShare-Setup.exe`,
-   `ButShare-Setup.exe.blockmap` e `latest.yml`, e publique.
+   `ButShare-Setup.exe.blockmap`, `latest.yml`, `ButShare.AppImage` e `latest-linux.yml`, e publique.
 
 ## Diagnóstico
 
-Se alguém não conseguir conectar, peça para abrir https://victorgmt.github.io/tela/diag.html e mandar um print.
+Se alguém não conseguir conectar, peça para abrir https://victorgmt.github.io/ButShare/diag.html e mandar um print.
