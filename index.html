@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ButShare</title>
 <link rel="icon" href="logo.png">
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<!-- Biblioteca de conexão guardada no próprio repositório: não depende de site de terceiros -->
+<script src="peerjs.min.js"></script>
 <style>
   /* Paleta vinho */
   :root{--bg:#110a0c;--card:#1c1114;--fg:#f4eaec;--mut:#b59ca2;--acc:#8c1a2c;--acc-hi:#a82339;--err:#d9434f;--line:#35212a;--borda:#2c1a20}
@@ -201,11 +202,12 @@ function hospedar() {
   if (APP) { show('audioBox'); hide('dicaSite'); }
   if (window.kp?.discord) show('discordBox');   // só o app 1.5+ tem o status no Discord
 
-  // Status no Discord: "Compartilhando a tela" com botão Assistir, enquanto a sala estiver aberta
+  // Status no Discord: "Compartilhando a tela · N assistindo", enquanto a sala estiver aberta.
+  // Sem o link: o status é público para quem vê o perfil; o link vai pelo chat da call.
   function presenca() {
     if (!window.kp?.discord) return;
     const aoVivo = peer && !$('linkBox').classList.contains('hidden');
-    window.kp.discord(aoVivo && $('discord').checked ? { link: $('link').value, assistindo: calls.size, inicio } : null);
+    window.kp.discord(aoVivo && $('discord').checked ? { assistindo: calls.size, inicio } : null);
   }
   $('discord').onchange = presenca;
 
@@ -262,7 +264,8 @@ function hospedar() {
   // O servidor gratuito do PeerJS às vezes trava; se a sala não abrir em 10 s, tenta de novo
   let timerSala = null, tentativasSala = 0;
   function abrirSala(motion) {
-    const id = 'tela-' + Math.random().toString(36).slice(2, 8);
+    // Aleatório de verdade e longo: o link da sala não dá para adivinhar
+    const id = 'tela-' + crypto.randomUUID();
     const p = peer = new Peer(id);
     clearTimeout(timerSala);
     timerSala = setTimeout(() => salaDemorou(motion), 10000);
@@ -288,6 +291,7 @@ function hospedar() {
     });
     p.on('error', e => {
       if (peer !== p) return;
+      if (e.type === 'peer-unavailable') return;   // um amigo saiu bem na hora da ligação; a saída dele já é tratada
       if (e.type === 'unavailable-id') { p.destroy(); abrirSala(motion); }
       else if (ERROS_DE_REDE.includes(e.type) || e.type === 'disconnected') {
         if ($('linkBox').classList.contains('hidden')) salaDemorou(motion);
@@ -332,10 +336,19 @@ function hospedar() {
 async function capturarApp(motion) {
   const id = await escolherFonte();
   if (!id) throw new Error('cancelado');
-  const s = await navigator.mediaDevices.getUserMedia({
-    audio: false,
-    video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: id, maxWidth: 1920, maxHeight: 1080, maxFrameRate: motion ? 60 : 30 } }
-  });
+  const fps = motion ? 60 : 30;
+  let s;
+  if (window.kp.usarFonte) {
+    // App 1.6+: o app só entrega a fonte escolhida, logo depois do clique; câmera e microfone ficam bloqueados
+    await window.kp.usarFonte(id);
+    s = await navigator.mediaDevices.getDisplayMedia({ audio: false, video: { width: { max: 1920 }, height: { max: 1080 }, frameRate: { ideal: fps, max: fps } } });
+  } else {
+    // Apps até a 1.5
+    s = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: id, maxWidth: 1920, maxHeight: 1080, maxFrameRate: fps } }
+    });
+  }
   if ($('audio').checked) s.addTrack(await audioSemDiscord());
   else pararAudio();
   return s;

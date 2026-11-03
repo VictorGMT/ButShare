@@ -10,6 +10,7 @@ ipcRenderer.on('update', (_, d) => { ultimoUpdate = d; if (aoUpdate) aoUpdate(d)
 
 contextBridge.exposeInMainWorld('kp', {
   fontes: () => ipcRenderer.invoke('fontes'),
+  usarFonte: id => ipcRenderer.invoke('usar-fonte', id),
   audioIniciar: (cb, aoErro) => {
     aoReceber = cb;
     ipcRenderer.removeAllListeners('audio-erro');

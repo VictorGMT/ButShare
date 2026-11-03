@@ -1,5 +1,5 @@
 // Processo principal do app ButShare (Electron).
-const { app, BrowserWindow, desktopCapturer, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, desktopCapturer, ipcMain, shell, session } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
@@ -18,6 +18,46 @@ function pararAudio() {
   if (cap) { cap.kill(); cap = null; }
 }
 
+// ---------- Segurança ----------
+// A página vem da internet, então o app só libera o que o ButShare usa.
+// Microfone, câmera, localização, notificações e o resto são sempre negados.
+const PERMITIDAS = new Set(['clipboard-sanitized-write']);   // botão "Copiar link"
+function origemNossa(url) {
+  try { const u = new URL(url); return u.protocol === 'file:' || u.origin === new URL(SITE).origin; }
+  catch { return false; }
+}
+// Só links https saem para o navegador; outros tipos (file:, protocolos do Windows) podem rodar programas
+const abrirFora = url => { if (/^https:\/\//i.test(url)) shell.openExternal(url); };
+
+// Captura de tela. O Electron não diferencia os pedidos de captura uns dos outros, então o próprio app decide:
+// só captura logo depois que a pessoa clicou (de verdade) numa tela/janela do seletor, e uma vez por clique.
+// Uma página adulterada não consegue simular esse clique, então não captura a tela escondida.
+let ultimasFontes = new Map();   // id -> tela/janela listada no seletor
+let ultimaInteracao = 0;         // último clique ou tecla real da pessoa na janela (o app vê isso direto)
+let fonteEscolhida = null;       // { fonte, quando }: a tela/janela clicada no seletor
+let permissaoCaptura = 0;        // momento da escolha; libera UM pedido de captura
+const VALE_MS = 5000;            // a escolha vale por 5 s, para uma captura
+// Miniaturas das janelas, escolha de fonte e áudio do PC só funcionam logo depois de um clique/tecla real
+const interagiuAgora = () => Date.now() - ultimaInteracao < VALE_MS;
+
+function travarPermissoes(ses) {
+  ses.setPermissionRequestHandler((_wc, perm, cb, det) => {
+    if (perm === 'display-capture') {
+      const ok = permissaoCaptura && Date.now() - permissaoCaptura < VALE_MS && origemNossa(det.requestingUrl);
+      permissaoCaptura = 0;   // uma permissão por escolha
+      return cb(!!ok);
+    }
+    cb(PERMITIDAS.has(perm) && origemNossa(det.requestingUrl));
+  });
+  ses.setPermissionCheckHandler((_wc, perm, origem) => PERMITIDAS.has(perm) && origemNossa(origem));
+  ses.setDisplayMediaRequestHandler((req, cb) => {
+    const f = fonteEscolhida;
+    fonteEscolhida = null;   // uma captura por escolha
+    if (!f || !req.userGesture || Date.now() - f.quando > VALE_MS || !origemNossa(req.securityOrigin)) return cb(null);
+    cb({ video: f.fonte });
+  });
+}
+
 function criarJanela() {
   const win = new BrowserWindow({
     width: 1100,
@@ -26,7 +66,8 @@ function criarJanela() {
     icon: path.join(__dirname, 'logo.png'),
     backgroundColor: '#110a0c',
     autoHideMenuBar: true,
-    webPreferences: { preload: path.join(__dirname, 'preload.js') }
+    // Já são o padrão do Electron; ficam escritos para não sumirem se o padrão mudar
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true, nodeIntegration: false }
   });
   win.loadURL(SITE, { extraHeaders: 'Cache-Control: no-cache\n' });
   win.webContents.on('did-fail-load', (_e, codigo, _desc, url, principal) => {
@@ -34,9 +75,12 @@ function criarJanela() {
   });
   // A janela só mostra o próprio site; qualquer outro link abre no navegador padrão
   win.webContents.on('will-navigate', (e, url) => {
-    if (!url.startsWith(SITE)) { e.preventDefault(); shell.openExternal(url); }
+    if (!url.startsWith(SITE)) { e.preventDefault(); abrirFora(url); }
   });
-  win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
+  win.webContents.setWindowOpenHandler(({ url }) => { abrirFora(url); return { action: 'deny' }; });
+  win.webContents.on('input-event', (_e, i) => {
+    if (i.type === 'mouseDown' || i.type === 'keyDown' || i.type === 'rawKeyDown') ultimaInteracao = Date.now();
+  });
   verificarUpdate(win);
 }
 
@@ -60,15 +104,25 @@ ipcMain.handle('update-baixar', () => {
 
 // Telas e janelas para o seletor, com miniatura
 ipcMain.handle('fontes', async (e) => {
+  if (!interagiuAgora()) return [];
   const propria = BrowserWindow.fromWebContents(e.sender)?.getMediaSourceId();
-  const fontes = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 320, height: 180 } });
-  return fontes
-    .filter(f => f.id !== propria)   // não mostra a própria janela do app
-    .map(f => ({ id: f.id, nome: f.name, tela: f.id.startsWith('screen:'), thumb: f.thumbnail.toDataURL() }));
+  const fontes = (await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 320, height: 180 } }))
+    .filter(f => f.id !== propria);   // não mostra a própria janela do app
+  ultimasFontes = new Map(fontes.map(f => [f.id, f]));
+  // JPEG em vez de PNG: miniatura 5 a 10 vezes menor, o seletor abre mais rápido
+  return fontes.map(f => ({ id: f.id, nome: f.name, tela: f.id.startsWith('screen:'), thumb: 'data:image/jpeg;base64,' + f.thumbnail.toJPEG(70).toString('base64') }));
+});
+// A pessoa clicou numa tela/janela do seletor: ela vale para a próxima captura
+ipcMain.handle('usar-fonte', (_e, id) => {
+  const fonte = ultimasFontes.get(id);
+  fonteEscolhida = fonte && interagiuAgora() ? { fonte, quando: Date.now() } : null;
+  permissaoCaptura = fonteEscolhida ? fonteEscolhida.quando : 0;
+  return !!fonteEscolhida;
 });
 
 // Áudio do PC sem o Discord: o audiocap.exe escreve PCM 16-bit 48 kHz estéreo no stdout
 ipcMain.handle('audio-iniciar', (e) => {
+  if (!interagiuAgora()) throw new Error('áudio só começa junto com um compartilhamento escolhido por clique');
   pararAudio();
   const exe = path.join(app.isPackaged ? process.resourcesPath : path.join(__dirname, 'audiocap'), 'audiocap.exe');
   const proc = spawn(exe, [], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
@@ -87,18 +141,20 @@ ipcMain.handle('audio-iniciar', (e) => {
 });
 ipcMain.handle('audio-parar', pararAudio);
 
-// Status no Discord. A página vem da internet, então só aceita link da própria sala do ButShare.
+// Status no Discord. Sem o link da sala: o status é público para quem vê o perfil,
+// então o link só vai por onde a pessoa escolher (ex.: o chat da call).
 ipcMain.handle('discord', (_e, d) => {
-  const ok = d && typeof d.link === 'string' && d.link.startsWith(SITE + '?sala=');
-  const n = ok ? Math.max(0, d.assistindo | 0) : 0;
-  discord.definir(ok ? {
+  const n = d ? Math.max(0, d.assistindo | 0) : 0;
+  discord.definir(d ? {
     details: 'Compartilhando a tela',
     state: n === 0 ? 'Esperando a galera' : `${n} assistindo`,
     timestamps: { start: Number(d.inicio) || Date.now() },
-    assets: { large_image: 'logo', large_text: 'ButShare' },
-    buttons: [{ label: 'Assistir', url: d.link }]
+    assets: { large_image: 'logo', large_text: 'ButShare' }
   } : null);
 });
 
-app.whenReady().then(criarJanela);
+app.whenReady().then(() => {
+  travarPermissoes(session.defaultSession);
+  criarJanela();
+});
 app.on('window-all-closed', () => { pararAudio(); app.quit(); });

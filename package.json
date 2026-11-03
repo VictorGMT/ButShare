@@ -1,7 +1,7 @@
 {
   "name": "butshare",
   "productName": "ButShare",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Compartilhar tela com os amigos, sem o áudio do Discord",
   "author": "VictorGMT",
   "main": "main.js",
@@ -9,7 +9,7 @@
     "start": "electron .",
     "audiocap": "x86_64-w64-mingw32-g++ -O2 -std=c++17 -static -s -o audiocap/audiocap.exe audiocap/audiocap.cpp -lole32 -luuid",
     "dist": "electron-builder --win --x64 --publish never",
-    "publicar": "electron-builder --win --x64 --publish always"
+    "test": "node --test"
   },
   "devDependencies": {
     "electron": "45.2.1",
@@ -20,7 +20,7 @@
   },
   "build": {
     "appId": "io.github.victorgmt.butshare",
-    "files": ["main.js", "preload.js", "discord.js", "index.html", "logo.png"],
+    "files": ["main.js", "preload.js", "discord.js", "index.html", "logo.png", "peerjs.min.js"],
     "extraResources": [{ "from": "audiocap/audiocap.exe", "to": "audiocap.exe" }],
     "win": { "target": "nsis", "icon": "build/icon.ico", "signExecutable": false },
     "nsis": {
