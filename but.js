@@ -166,7 +166,13 @@
   const largura = () => document.documentElement.clientWidth;
   const chao = () => innerHeight - 6 - PE;   // y do boneco com os pés no chão da janela
   const vira = direita => el.classList.toggle('dir', direita);
-  const poe = (p, txt = '') => { el.dataset.p = p; fala.textContent = txt; };
+  const pernas = el.querySelector('.pernas'), tronco = el.querySelector('.tronco');
+  // SVG não tem z-index: sentado, as pernas vão pra depois do tronco no desenho, pra ficarem na frente dele
+  const poe = (p, txt = '') => {
+    el.dataset.p = p; fala.textContent = txt;
+    const frente = p.includes('sentado');
+    if (frente !== (pernas.previousElementSibling === tronco)) pernas.parentNode.insertBefore(pernas, frente ? tronco.nextSibling : tronco);
+  };
   let pos = { x: 0, y: chao() };
   const aplica = () => el.style.transform = `translate(${pos.x}px,${pos.y}px)`;
 
