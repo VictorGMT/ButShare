@@ -3,6 +3,7 @@ const { app, BrowserWindow, desktopCapturer, ipcMain, shell } = require('electro
 const { spawn } = require('child_process');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
+const discord = require('./discord');
 
 // A interface vem do site: o que for publicado no GitHub chega pra todo mundo ao abrir o app.
 // Sem internet (ou site fora do ar), usa a cópia que vai dentro do .exe.
@@ -85,6 +86,19 @@ ipcMain.handle('audio-iniciar', (e) => {
   proc.on('exit', code => { if (code) erro('captura de áudio parou (código ' + code + ')'); });
 });
 ipcMain.handle('audio-parar', pararAudio);
+
+// Status no Discord. A página vem da internet, então só aceita link da própria sala do ButShare.
+ipcMain.handle('discord', (_e, d) => {
+  const ok = d && typeof d.link === 'string' && d.link.startsWith(SITE + '?sala=');
+  const n = ok ? Math.max(0, d.assistindo | 0) : 0;
+  discord.definir(ok ? {
+    details: 'Compartilhando a tela',
+    state: n === 0 ? 'Esperando a galera' : `${n} assistindo`,
+    timestamps: { start: Number(d.inicio) || Date.now() },
+    assets: { large_image: 'logo', large_text: 'ButShare' },
+    buttons: [{ label: 'Assistir', url: d.link }]
+  } : null);
+});
 
 app.whenReady().then(criarJanela);
 app.on('window-all-closed', () => { pararAudio(); app.quit(); });

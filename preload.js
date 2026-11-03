@@ -18,5 +18,6 @@ contextBridge.exposeInMainWorld('kp', {
   },
   audioParar: () => { aoReceber = null; return ipcRenderer.invoke('audio-parar'); },
   aoUpdate: cb => { aoUpdate = cb; if (ultimoUpdate) cb(ultimoUpdate); },
-  atualizar: () => ipcRenderer.invoke('update-baixar')
+  atualizar: () => ipcRenderer.invoke('update-baixar'),
+  discord: d => ipcRenderer.invoke('discord', d)
 });

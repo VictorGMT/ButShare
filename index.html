@@ -85,6 +85,7 @@
       <option value="detail">Nitidez — texto e código (30 fps)</option>
     </select>
     <label id="audioBox" class="hidden"><input type="checkbox" id="audio" checked> Áudio do PC (sem o Discord)</label>
+    <label id="discordBox" class="hidden"><input type="checkbox" id="discord" checked> Mostrar no Discord</label>
     <button id="start" data-i="compartilhar">Compartilhar tela</button>
     <button id="swap" class="sec hidden" data-i="trocar">Trocar tela</button>
     <button id="stop" class="danger hidden" data-i="parar">Parar</button>
@@ -189,11 +190,20 @@ function avisoDeUpdate() {
 /* ---------- Quem compartilha ---------- */
 function hospedar() {
   $('sub').textContent = 'Você é quem vai compartilhar.';
-  let peer = null, stream = null;
+  let peer = null, stream = null, inicio = 0;
   const calls = new Map();
   const st = t => $('hostStatus').textContent = t;
-  const contar = () => $('countTxt').textContent = `${calls.size} assistindo`;
+  const contar = () => { $('countTxt').textContent = `${calls.size} assistindo`; presenca(); };
   if (APP) { show('audioBox'); hide('dicaSite'); }
+  if (window.kp?.discord) show('discordBox');   // só o app 1.5+ tem o status no Discord
+
+  // Status no Discord: "Compartilhando a tela" com botão Assistir, enquanto a sala estiver aberta
+  function presenca() {
+    if (!window.kp?.discord) return;
+    const aoVivo = peer && !$('linkBox').classList.contains('hidden');
+    window.kp.discord(aoVivo && $('discord').checked ? { link: $('link').value, assistindo: calls.size, inicio } : null);
+  }
+  $('discord').onchange = presenca;
 
   $('start').onclick = async () => {
     const motion = $('modo').value === 'motion';
@@ -202,6 +212,7 @@ function hospedar() {
 
     $('preview').srcObject = stream;
     $('modo').disabled = true;
+    inicio = Date.now();
     hide('start'); show('swap', 'stop', 'count', 'preview');
     contar();
     st('Abrindo a sala…');
@@ -251,6 +262,7 @@ function hospedar() {
       $('link').value = (APP ? SITE : location.origin + location.pathname) + '?sala=' + id;
       show('linkBox');
       st('');
+      presenca();
     });
     // Cada amigo abre uma conexão de dados; a gente responde ligando com a tela
     peer.on('connection', conn => {
@@ -275,6 +287,7 @@ function hospedar() {
     $('preview').srcObject = null;
     $('modo').disabled = false;
     hide('swap', 'stop', 'count', 'preview', 'linkBox'); show('start');
+    presenca();   // tira o status do Discord
     st('Compartilhamento encerrado. Um novo link é gerado na próxima vez.');
   }
   $('stop').onclick = parar;

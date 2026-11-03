@@ -1,7 +1,7 @@
 {
   "name": "butshare",
   "productName": "ButShare",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Compartilhar tela com os amigos, sem o áudio do Discord",
   "author": "VictorGMT",
   "main": "main.js",
@@ -20,7 +20,7 @@
   },
   "build": {
     "appId": "io.github.victorgmt.butshare",
-    "files": ["main.js", "preload.js", "index.html", "logo.png"],
+    "files": ["main.js", "preload.js", "discord.js", "index.html", "logo.png"],
     "extraResources": [{ "from": "audiocap/audiocap.exe", "to": "audiocap.exe" }],
     "win": { "target": "nsis", "icon": "build/icon.ico", "signExecutable": false },
     "nsis": {
