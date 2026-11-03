@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ButShare diagnóstico</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  body{margin:0;padding:24px 16px;background:#110a0c;color:#f4eaec;font:14px/1.6 ui-monospace,Consolas,monospace}
+  h1{font:600 18px system-ui,sans-serif;margin:0 0 12px}
+  pre{white-space:pre-wrap;word-break:break-word;margin:0}
+</style>
+</head>
+<body>
+<h1>ButShare: diagnóstico de conexão</h1>
+<pre id="out">Rodando… (leva uns 30 segundos)</pre>
+<script>
+// Página de diagnóstico: mede a internet de quem abre, não envia nada para lugar nenhum além dos servidores testados
+const linhas = [];
+const log = (...a) => { linhas.push(a.join(' ')); document.getElementById('out').textContent = linhas.join('\n'); };
+const ms = t => Math.round(performance.now() - t) + ' ms';
+
+// Uma conexão só, com dois servidores STUN: se o mesmo socket aparece com portas externas diferentes, o NAT é "simétrico"
+async function testarNat() {
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }] });
+  pc.createDataChannel('x');
+  const cands = [];
+  pc.onicecandidate = e => { if (e.candidate && e.candidate.candidate) cands.push(e.candidate.candidate); };
+  await pc.setLocalDescription(await pc.createOffer());
+  await new Promise(r => { pc.onicegatheringstatechange = () => pc.iceGatheringState === 'complete' && r(); setTimeout(r, 8000); });
+  pc.close();
+  const srflx = cands.filter(c => / typ srflx /.test(c)).map(c => {
+    const p = c.split(' ');
+    return { proto: p[2].toLowerCase(), externo: p[4] + ':' + p[5], base: (c.match(/rport (\d+)/) || [])[1] };
+  }).filter(x => x.proto === 'udp');
+  log('Candidatos ICE:', cands.length, '| host:', cands.filter(c => / typ host /.test(c)).length, '| srflx (IP público visto pelo STUN):', srflx.length);
+  srflx.forEach(x => log('   porta local', x.base, '-> público', x.externo));
+  const porBase = {};
+  srflx.forEach(x => (porBase[x.base] = porBase[x.base] || new Set()).add(x.externo));
+  const simetrico = Object.values(porBase).some(s => s.size > 1);
+  if (!srflx.length) log('NAT: SEM RESPOSTA DO STUN (UDP bloqueado?) -> ligação direta impossível, precisa de TURN');
+  else log('NAT:', simetrico ? 'SIMÉTRICO (cada destino ganha uma porta diferente) -> ligação direta costuma falhar, precisa de TURN' : 'normal (mesma porta para todos os destinos) -> ligação direta costuma funcionar');
+}
+
+// Servidor do PeerJS: tempo para abrir e uma ligação completa entre dois "PCs" nesta mesma página
+function testarPeerjs() {
+  return new Promise(resolve => {
+    const fim = setTimeout(() => { log('PeerJS: NÃO TERMINOU em 25 s'); resolve(); }, 25000);
+    const t0 = performance.now();
+    const a = new Peer();
+    a.on('error', e => log('PeerJS A erro:', e.type));
+    a.on('open', id => {
+      log('PeerJS: servidor respondeu (A) em', ms(t0));
+      const t1 = performance.now();
+      const b = new Peer();
+      b.on('error', e => log('PeerJS B erro:', e.type));
+      b.on('open', () => {
+        log('PeerJS: servidor respondeu (B) em', ms(t1));
+        const t2 = performance.now();
+        const conn = b.connect(id, { reliable: true });
+        conn.on('open', () => { log('PeerJS: ligação A<->B abriu em', ms(t2)); clearTimeout(fim); a.destroy(); b.destroy(); resolve(); });
+      });
+    });
+  });
+}
+
+(async () => {
+  log('Navegador:', navigator.userAgent);
+  log('');
+  try { await testarNat(); } catch (e) { log('Teste de NAT falhou:', e.message); }
+  log('');
+  try { await testarPeerjs(); } catch (e) { log('Teste do PeerJS falhou:', e.message); }
+  log('');
+  log('FIM');
+})();
+</script>
+</body>
+</html>
