@@ -3,42 +3,51 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>KP-TELA</title>
+<title>ButShare</title>
+<link rel="icon" href="logo.png">
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
-  :root{--bg:#0f1115;--card:#181b22;--fg:#e8eaf0;--mut:#9aa1b2;--acc:#5b8cff;--err:#ff6b6b;--line:#2a2f3a}
+  /* Paleta vinho */
+  :root{--bg:#110a0c;--card:#1c1114;--fg:#f4eaec;--mut:#b59ca2;--acc:#8c1a2c;--acc-hi:#a82339;--err:#d9434f;--line:#35212a;--borda:#2c1a20}
   *{box-sizing:border-box}
-  body{margin:0;min-height:100vh;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:24px 16px}
-  h1{font-size:22px;margin:0}
-  .card{background:var(--card);border-radius:14px;padding:20px;width:100%;max-width:1000px;margin-top:16px}
-  button,select{font:inherit;border:0;border-radius:10px;padding:10px 16px;cursor:pointer}
+  body{margin:0;min-height:100vh;background:radial-gradient(1100px 480px at 50% -12%,#3d0f1b 0%,transparent 70%),var(--bg);background-attachment:fixed;color:var(--fg);font:15px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:24px 16px}
+  h1{font-size:26px;margin:0;letter-spacing:.01em}
+  .marca{display:flex;align-items:center;gap:12px}
+  .marca img{width:44px;height:44px;filter:drop-shadow(0 0 10px rgba(200,20,40,.35))}
+  .card{background:var(--card);border:1px solid var(--borda);border-radius:14px;padding:20px;width:100%;max-width:1000px;margin-top:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  button,select{font:inherit;border:0;border-radius:10px;padding:10px 16px;cursor:pointer;transition:background .15s,filter .15s}
   button{background:var(--acc);color:#fff;font-weight:600}
+  button:hover{background:var(--acc-hi)}
+  button:focus-visible,select:focus-visible{outline:2px solid var(--acc-hi);outline-offset:2px}
   button.sec{background:var(--line);color:var(--fg)}
+  button.sec:hover{background:#45293a}
   button.danger{background:var(--err)}
+  button.danger:hover{filter:brightness(1.1)}
   select{background:var(--line);color:var(--fg)}
   select:disabled{opacity:.5}
+  input[type=checkbox]{accent-color:var(--acc-hi);width:16px;height:16px}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   .link{display:flex;gap:8px;margin-top:14px}
-  .link input{flex:1;min-width:0;background:#0b0d11;color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit}
-  video{width:100%;max-height:78vh;background:#000;border-radius:10px;margin-top:14px;display:block}
+  .link input{flex:1;min-width:0;background:#0c0708;color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit}
+  video{width:100%;max-height:78vh;background:#000;border-radius:10px;margin-top:14px;display:block;border:1px solid var(--borda)}
   .status{color:var(--mut);margin-top:10px}
-  .badge{background:var(--line);border-radius:999px;padding:4px 12px;font-size:13px}
+  .badge{background:rgba(140,26,44,.35);border:1px solid rgba(168,35,57,.5);border-radius:999px;padding:4px 12px;font-size:13px}
   label{display:flex;gap:6px;align-items:center;cursor:pointer}
   /* Seletor de telas do app, no estilo do Discord */
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
-  .picker{background:var(--card);border-radius:14px;padding:20px;width:100%;max-width:920px;max-height:88vh;overflow:auto}
+  .picker{background:var(--card);border:1px solid var(--borda);border-radius:14px;padding:20px;width:100%;max-width:920px;max-height:88vh;overflow:auto}
   .picker h2{margin:0;font-size:18px}
   .picker h3{margin:16px 0 8px;font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
   .fonte{background:var(--line);border:2px solid transparent;border-radius:10px;padding:8px;text-align:left;color:var(--fg);font-weight:400}
-  .fonte:hover,.fonte:focus-visible{border-color:var(--acc);outline:none}
+  .fonte:hover,.fonte:focus-visible{border-color:var(--acc-hi);outline:none;background:#3e2530}
   .fonte img{width:100%;aspect-ratio:16/9;object-fit:contain;background:#000;border-radius:6px;display:block}
   .fonte span{display:block;margin-top:6px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .hidden{display:none!important}
 </style>
 </head>
 <body>
-<h1>📺 KP-TELA</h1>
+<h1 class="marca"><img src="logo.png" alt=""> ButShare</h1>
 <div class="status" id="sub"></div>
 
 <!-- Quem compartilha -->
@@ -90,7 +99,7 @@ const $ = id => document.getElementById(id);
 const show = (...ids) => ids.forEach(i => $(i).classList.remove('hidden'));
 const hide = (...ids) => ids.forEach(i => $(i).classList.add('hidden'));
 
-const APP = !!window.kp;                              // rodando dentro do app KP-TELA
+const APP = !!window.kp;                              // rodando dentro do app ButShare
 const SITE = 'https://victorgmt.github.io/tela/';     // no app, o link da sala aponta pro site
 
 const sala = new URLSearchParams(location.search).get('sala');

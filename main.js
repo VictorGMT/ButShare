@@ -1,4 +1,4 @@
-// Processo principal do app KP-TELA (Electron).
+// Processo principal do app ButShare (Electron).
 const { app, BrowserWindow, desktopCapturer, ipcMain, shell } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -17,8 +17,9 @@ function criarJanela() {
   const win = new BrowserWindow({
     width: 1100,
     height: 780,
-    title: 'KP-TELA',
-    backgroundColor: '#0f1115',
+    title: 'ButShare',
+    icon: path.join(__dirname, 'logo.png'),
+    backgroundColor: '#110a0c',
     autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js') }
   });
@@ -34,10 +35,11 @@ function criarJanela() {
 }
 
 // Telas e janelas para o seletor, com miniatura
-ipcMain.handle('fontes', async () => {
+ipcMain.handle('fontes', async (e) => {
+  const propria = BrowserWindow.fromWebContents(e.sender)?.getMediaSourceId();
   const fontes = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 320, height: 180 } });
   return fontes
-    .filter(f => f.name !== 'KP-TELA')
+    .filter(f => f.id !== propria)   // não mostra a própria janela do app
     .map(f => ({ id: f.id, nome: f.name, tela: f.id.startsWith('screen:'), thumb: f.thumbnail.toDataURL() }));
 });
 
