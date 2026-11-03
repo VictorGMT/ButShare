@@ -1,0 +1,24 @@
+{
+  "name": "kp-tela",
+  "productName": "KP-TELA",
+  "version": "1.0.0",
+  "description": "Compartilhar tela com os amigos, sem o áudio do Discord",
+  "author": "VictorGMT",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "audiocap": "x86_64-w64-mingw32-g++ -O2 -std=c++17 -static -s -o audiocap/audiocap.exe audiocap/audiocap.cpp -lole32 -luuid",
+    "dist": "electron-builder --win portable --x64"
+  },
+  "devDependencies": {
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "io.github.victorgmt.kptela",
+    "files": ["main.js", "preload.js", "index.html"],
+    "extraResources": [{ "from": "audiocap/audiocap.exe", "to": "audiocap.exe" }],
+    "win": { "target": "portable", "signAndEditExecutable": false },
+    "portable": { "artifactName": "KP-TELA.exe" }
+  }
+}

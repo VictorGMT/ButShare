@@ -23,6 +23,17 @@
   video{width:100%;max-height:78vh;background:#000;border-radius:10px;margin-top:14px;display:block}
   .status{color:var(--mut);margin-top:10px}
   .badge{background:var(--line);border-radius:999px;padding:4px 12px;font-size:13px}
+  label{display:flex;gap:6px;align-items:center;cursor:pointer}
+  /* Seletor de telas do app, no estilo do Discord */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
+  .picker{background:var(--card);border-radius:14px;padding:20px;width:100%;max-width:920px;max-height:88vh;overflow:auto}
+  .picker h2{margin:0;font-size:18px}
+  .picker h3{margin:16px 0 8px;font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+  .fonte{background:var(--line);border:2px solid transparent;border-radius:10px;padding:8px;text-align:left;color:var(--fg);font-weight:400}
+  .fonte:hover,.fonte:focus-visible{border-color:var(--acc);outline:none}
+  .fonte img{width:100%;aspect-ratio:16/9;object-fit:contain;background:#000;border-radius:6px;display:block}
+  .fonte span{display:block;margin-top:6px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .hidden{display:none!important}
 </style>
 </head>
@@ -37,6 +48,7 @@
       <option value="motion">Fluidez — jogos e vídeos (60 fps)</option>
       <option value="detail">Nitidez — texto e código (30 fps)</option>
     </select>
+    <label id="audioBox" class="hidden"><input type="checkbox" id="audio" checked> Áudio do PC (sem o Discord)</label>
     <button id="start">Compartilhar tela</button>
     <button id="swap" class="sec hidden">🔄 Trocar tela</button>
     <button id="stop" class="danger hidden">Parar</button>
@@ -48,7 +60,7 @@
   </div>
   <video id="preview" muted autoplay playsinline class="hidden"></video>
   <div class="status" id="hostStatus">Escolha o modo e clique em compartilhar. Depois é só mandar o link pros seus amigos.</div>
-  <div class="status">🔈 Áudio sem o Discord: escolha uma <b>Aba</b> no seletor (só o som dela vai junto). Na <b>Tela inteira</b>, o áudio do sistema leva tudo do PC, até as vozes do Discord.</div>
+  <div class="status" id="dicaSite">🔈 Áudio sem o Discord: escolha uma <b>Aba</b> no seletor (só o som dela vai junto). Na <b>Tela inteira</b>, o áudio do sistema leva tudo do PC, até as vozes do Discord.</div>
 </section>
 
 <!-- Quem assiste -->
@@ -61,10 +73,25 @@
   <div class="status" id="viewStatus">Conectando…</div>
 </section>
 
+<!-- Seletor de telas (só no app) -->
+<div class="modal hidden" id="picker">
+  <div class="picker" role="dialog" aria-modal="true" aria-label="Escolher o que compartilhar">
+    <div class="row" style="justify-content:space-between">
+      <h2>O que você quer compartilhar?</h2>
+      <button class="sec" id="cancelar">Cancelar</button>
+    </div>
+    <h3>Telas</h3><div class="grid" id="telas"></div>
+    <h3>Janelas</h3><div class="grid" id="janelas"></div>
+  </div>
+</div>
+
 <script>
 const $ = id => document.getElementById(id);
 const show = (...ids) => ids.forEach(i => $(i).classList.remove('hidden'));
 const hide = (...ids) => ids.forEach(i => $(i).classList.add('hidden'));
+
+const APP = !!window.kp;                              // rodando dentro do app KP-TELA
+const SITE = 'https://victorgmt.github.io/tela/';     // no app, o link da sala aponta pro site
 
 const sala = new URLSearchParams(location.search).get('sala');
 if (sala) assistir(sala); else hospedar();
@@ -76,6 +103,7 @@ function hospedar() {
   const calls = new Map();
   const st = t => $('hostStatus').textContent = t;
   const contar = () => $('count').textContent = `${calls.size} assistindo`;
+  if (APP) { show('audioBox'); hide('dicaSite'); }
 
   $('start').onclick = async () => {
     const motion = $('modo').value === 'motion';
@@ -90,9 +118,9 @@ function hospedar() {
     abrirSala(motion);
   };
 
-  // Abre o seletor do navegador: tela inteira, janela ou aba (com miniaturas)
+  // No app: seletor próprio + áudio sem o Discord. No site: seletor do navegador.
   async function capturar(motion) {
-    const s = await navigator.mediaDevices.getDisplayMedia({
+    const s = APP ? await capturarApp(motion) : await navigator.mediaDevices.getDisplayMedia({
       video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: motion ? 60 : 30 } },
       audio: true,                   // o próprio seletor tem a chave de ligar/desligar o áudio
       systemAudio: 'include',
@@ -130,7 +158,7 @@ function hospedar() {
     const id = 'tela-' + Math.random().toString(36).slice(2, 8);
     peer = new Peer(id);
     peer.on('open', () => {
-      $('link').value = location.origin + location.pathname + '?sala=' + id;
+      $('link').value = (APP ? SITE : location.origin + location.pathname) + '?sala=' + id;
       show('linkBox');
       st('🔴 Ao vivo! Mande o link pros seus amigos.');
     });
@@ -149,6 +177,7 @@ function hospedar() {
   }
 
   function parar() {
+    pararAudio();
     if (stream) stream.getTracks().forEach(t => t.stop());
     if (peer) peer.destroy();
     stream = peer = null;
@@ -164,6 +193,96 @@ function hospedar() {
     $('copy').textContent = 'Copiado!';
     setTimeout(() => $('copy').textContent = 'Copiar link', 1500);
   });
+}
+
+/* ---------- Só no app ---------- */
+async function capturarApp(motion) {
+  const id = await escolherFonte();
+  if (!id) throw new Error('cancelado');
+  const s = await navigator.mediaDevices.getUserMedia({
+    audio: false,
+    video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: id, maxWidth: 1920, maxHeight: 1080, maxFrameRate: motion ? 60 : 30 } }
+  });
+  if ($('audio').checked) s.addTrack(await audioSemDiscord());
+  else pararAudio();
+  return s;
+}
+
+// Mostra telas e janelas com miniatura; resolve com o id escolhido ou null
+async function escolherFonte() {
+  const fontes = await window.kp.fontes();
+  $('telas').replaceChildren(); $('janelas').replaceChildren();
+  return new Promise(resolve => {
+    const fim = id => { hide('picker'); document.onkeydown = null; resolve(id); };
+    for (const f of fontes) {
+      const b = document.createElement('button');
+      b.className = 'fonte';
+      b.title = f.nome;
+      const img = document.createElement('img');
+      img.src = f.thumb; img.alt = '';
+      const nome = document.createElement('span');
+      nome.textContent = f.nome;
+      b.append(img, nome);
+      b.onclick = () => fim(f.id);
+      $(f.tela ? 'telas' : 'janelas').append(b);
+    }
+    $('cancelar').onclick = () => fim(null);
+    document.onkeydown = e => { if (e.key === 'Escape') fim(null); };
+    show('picker');
+    $('picker').querySelector('.fonte')?.focus();
+  });
+}
+
+// O audiocap.exe manda PCM 16-bit 48 kHz estéreo; este worklet transforma em som pro WebRTC
+const WORKLET = `
+class PCM extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.q = []; this.n = 0; this.cur = null; this.i = 0; this.tocando = false;
+    this.port.onmessage = e => {
+      const c = new Int16Array(e.data);
+      this.q.push(c); this.n += c.length;
+      while (this.n > 19200) this.n -= this.q.shift().length;   // no máximo ~200 ms de atraso
+    };
+  }
+  process(_, [out]) {
+    const [L, R] = out;
+    for (let k = 0; k < L.length; k++) {
+      if (!this.cur || this.i >= this.cur.length) {
+        if (!this.tocando && this.n < 3840) { L[k] = R[k] = 0; continue; }  // junta 40 ms antes de tocar
+        this.cur = this.q.shift(); this.i = 0;
+        if (!this.cur) { this.tocando = false; L[k] = R[k] = 0; continue; }
+        this.tocando = true; this.n -= this.cur.length;
+      }
+      L[k] = this.cur[this.i++] / 32768;
+      R[k] = this.cur[this.i++] / 32768;
+    }
+    return true;
+  }
+}
+registerProcessor('pcm', PCM);`;
+
+let audioCtx = null;
+async function audioSemDiscord() {
+  pararAudio();
+  audioCtx = new AudioContext({ sampleRate: 48000 });
+  await audioCtx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' })));
+  const node = new AudioWorkletNode(audioCtx, 'pcm', { numberOfInputs: 0, outputChannelCount: [2] });
+  const dest = audioCtx.createMediaStreamDestination();
+  node.connect(dest);
+  audioCtx.resume();
+  await window.kp.audioIniciar(
+    chunk => { const c = chunk.slice().buffer; node.port.postMessage(c, [c]); },
+    msg => $('hostStatus').textContent = '⚠️ Áudio: ' + msg
+  );
+  return dest.stream.getAudioTracks()[0];
+}
+
+function pararAudio() {
+  if (!APP) return;
+  window.kp.audioParar();
+  if (audioCtx) audioCtx.close();
+  audioCtx = null;
 }
 
 // Libera bitrate alto (o padrão do navegador costuma ser baixo e deixa a imagem borrada)
