@@ -76,6 +76,9 @@
   .but[data-p~=pendurado] .perna-d,.but[data-p~=pego] .perna-d{transform-origin:68px 104px;animation:but-chute .35s -.17s infinite alternate}
   .but[data-p~=pego] .braco-d{animation:but-agita .3s infinite alternate}
   .but[data-p~=pego] .braco-e{animation:but-agita-e .3s -.15s infinite alternate}
+  .but[data-p~=batendo] .abertos{display:none}
+  .but[data-p~=batendo] .fechados{display:inline}
+  .but-bum{position:fixed;left:0;top:0;z-index:6;pointer-events:none}
 
   @keyframes but-pisca{0%,95%,100%{transform:none}97%{transform:scaleY(.1)}}
   @keyframes but-passo{0%,50%,100%{transform:none}25%{transform:translate(-3px,-7px)}}
@@ -325,9 +328,119 @@
       poe(base + 'pipoca olhando'); await espera(COMER); n++;
     } while (n < 2 || Math.random() < .75);
   }
-  // Depois de solto: cai e encara quem pegou ele, com a cara séria
+  /* ---------- Arremesso ---------- */
+  const G = 0.0028, PASSA = 2;   // gravidade (px/ms²); acima dessa velocidade (px/ms) às vezes ele atravessa a parede
+  const SAIU = ['e', 'd', 't'];  // saiu da janela pela esquerda, direita ou teto
+  let lance = [0, 0];            // velocidade do mouse ao soltar
+  // Amassa contra a parede/chão: escala a partir do lado que bateu e volta
+  const amassa = (origem, sx, sy) => pulo.animate([
+    { transform: `scale(${sx},${sy})`, transformOrigin: origem }, { transform: 'none', transformOrigin: origem }
+  ], { duration: 280, easing: 'ease-out' });
+  // Voa com gravidade, quica nas paredes, teto e chão, desliza sentado até parar.
+  // Resolve 'chao', 'moldura' (caiu em cima da tela) ou um de SAIU.
+  const voo = (vx, vy, podePassar) => passo(ok => {
+    let antes = performance.now(), id, saindo = null, deslizando = false, olhoFechado = 0;
+    const acaba = r => { pulo.style.rotate = ''; ok(r); };
+    // Bateu numa parede: às vezes, se veio rápido, passa direto (só na primeira batida)
+    const bateu = (lado, v) => {
+      if (podePassar && Math.abs(v) > PASSA && Math.random() < .5) saindo = lado;
+      podePassar = false;
+      return !saindo;
+    };
+    const quadro = agora => {
+      const dt = Math.min(32, agora - antes), m = moldura(), fim = largura() - W, y0 = pos.y;
+      antes = agora;
+      if (!deslizando) vy += G * dt;
+      pos.x += vx * dt; pos.y += vy * dt;
+      if (saindo) {
+        aplica();
+        if (pos.x < -W * 1.5 || pos.x > fim + W * 1.5 || pos.y < -H * 1.5) return acaba(saindo);
+        id = requestAnimationFrame(quadro); return;
+      }
+      if (pos.x < 0 && vx < 0 && bateu('e', vx)) { pos.x = 0; vx *= -.45; amassa('left center', .6, 1.15); olhoFechado = agora + 300; }
+      if (pos.x > fim && vx > 0 && bateu('d', vx)) { pos.x = fim; vx *= -.45; amassa('right center', .6, 1.15); olhoFechado = agora + 300; }
+      if (pos.y < 0 && vy < 0 && bateu('t', vy)) { pos.y = 0; vy *= -.4; amassa('center top', 1.15, .6); olhoFechado = agora + 300; }
+      if (!saindo) {
+        if (m && vy > 0 && y0 + H <= m.t && pos.y + H > m.t && pos.x + W > m.l && pos.x < m.r) {   // caiu em cima da moldura
+          pos.y = m.t - H; aplica(); amassa('center bottom', 1.25, .7); return acaba('moldura');
+        }
+        if (pos.y > chao() && vy > 0) {
+          pos.y = chao();
+          if (vy > .35) { vy *= -.35; vx *= .75; amassa('center bottom', 1.3, .65); olhoFechado = agora + 200; }
+          else { vy = 0; deslizando = true; }
+        }
+        if (deslizando) { vx *= Math.pow(.992, dt); if (Math.abs(vx) < .03) { aplica(); return acaba('chao'); } }
+        const p = deslizando ? 'sentado serio' : agora < olhoFechado ? 'pego batendo' : 'pego serio';
+        if (el.dataset.p !== p) poe(p);
+        pulo.style.rotate = deslizando ? '' : Math.max(-30, Math.min(30, vx * 12)) + 'deg';
+      }
+      aplica();
+      id = requestAnimationFrame(quadro);
+    };
+    vira(vx > 0); poe('pego serio');
+    id = requestAnimationFrame(quadro);
+    return () => { cancelAnimationFrame(id); pulo.style.rotate = ''; };
+  });
+
+  // Explosão: estrela amarela e vermelha com "BUM!" e um estouro sintetizado (sem arquivo de som)
+  let audio;
+  function bum(x, y) {
+    try {
+      audio ??= new AudioContext(); audio.resume();
+      const t = audio.currentTime, n = audio.sampleRate * .8 | 0;
+      const buf = audio.createBuffer(1, n, audio.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) ** 3;
+      const ruido = audio.createBufferSource(), filtro = audio.createBiquadFilter(), vol = audio.createGain();
+      ruido.buffer = buf; filtro.type = 'lowpass';
+      filtro.frequency.setValueAtTime(3000, t); filtro.frequency.exponentialRampToValueAtTime(120, t + .7);
+      vol.gain.value = .45;
+      ruido.connect(filtro).connect(vol).connect(audio.destination); ruido.start(t);
+      const grave = audio.createOscillator(), gv = audio.createGain();   // o "tum" por baixo
+      grave.frequency.setValueAtTime(110, t); grave.frequency.exponentialRampToValueAtTime(35, t + .4);
+      gv.gain.setValueAtTime(.6, t); gv.gain.exponentialRampToValueAtTime(.001, t + .5);
+      grave.connect(gv).connect(audio.destination); grave.start(t); grave.stop(t + .5);
+    } catch {}
+    const pts = (r1, r2) => Array.from({ length: 22 }, (_, i) => {
+      const a = i * Math.PI / 11, r = i % 2 ? r1 : r2;
+      return `${50 + r * Math.cos(a)},${50 + r * Math.sin(a)}`;
+    }).join(' ');
+    const b = document.createElement('div');
+    b.className = 'but-bum';
+    b.innerHTML = `<svg viewBox="0 0 100 100" width="160" height="160" stroke="#1a0a0e" stroke-width="3" stroke-linejoin="round">
+      <polygon points="${pts(24, 50)}" fill="#f6c21b"/><polygon points="${pts(14, 32)}" fill="#f21b2d" stroke="none"/>
+      <text x="50" y="57" font-size="20" font-weight="800" text-anchor="middle" fill="#fff" stroke-width="2" paint-order="stroke" font-family="'Comic Sans MS','Segoe Print',cursive">BUM!</text></svg>`;
+    document.body.append(b);
+    const em = `translate(${x - 80}px,${y - 80}px)`;
+    b.animate([
+      { transform: `${em} scale(.2)`, opacity: 1 },
+      { transform: `${em} scale(1.15) rotate(15deg)`, opacity: 1, offset: .3 },
+      { transform: `${em} scale(1.5) rotate(25deg)`, opacity: 0 }
+    ], { duration: 750, easing: 'ease-out' }).onfinish = () => b.remove();
+  }
+
+  // Depois de solto: voa com a velocidade do mouse. Se atravessou uma parede, explode numa outra
+  // (parede ou teto) e volta devagar. No fim, sai de cima da tela se parou lá e encara quem jogou, sério.
   async function cair() {
-    await descer('serio');
+    let r = await voo(...lance, true);
+    if (SAIU.includes(r)) {
+      await espera(rand(500, 1200));
+      const outros = SAIU.filter(l => l !== r), lado = outros[Math.floor(Math.random() * outros.length)];
+      const L = largura(), y = rand(.15, .5) * chao(), x = rand(.15, .85) * (L - W);
+      const [bx, by, px, py, vx, vy] =
+        lado === 'e' ? [0, y + H / 2, -W / 2, y, .5, -.4] :
+        lado === 'd' ? [L, y + H / 2, L - W / 2, y, -.5, -.4] :
+                       [x + W / 2, 0, x, -H / 2, rand(-.3, .3), .1];
+      bum(bx, by);
+      pos = { x: px, y: py }; aplica();
+      r = await voo(vx, vy, false);
+    }
+    if (r === 'moldura') await descer('serio');
+    else if (bate(moldura(), pos.x, pos.y)) {   // parou atrás da tela: pula pro lado dela
+      const [x, y] = afasta(pos.x, pos.y);
+      vira(x > pos.x); poe('pulando serio');
+      await salto(x, y, 40, 400);
+      await descer('serio');
+    }
     await parado('serio encarando', 1200, 2200);
   }
 
@@ -337,7 +450,7 @@
 
   /* ---------- Pegar e arrastar ---------- */
   let preso = null, solta = null, caiu = false;
-  // Arrastando, ele não entra na tela compartilhada: é empurrado pra beirada mais perto
+  // Ponto mais perto de (x, y) que não fica por cima da tela compartilhada
   function afasta(x, y) {
     const m = moldura(), fim = largura() - W;
     x = Math.min(fim, Math.max(0, x)); y = Math.min(chao(), Math.max(0, y));
@@ -359,15 +472,22 @@
     poe('pego serio');
     document.documentElement.classList.add('but-arrastando');
     let antes = e.clientX, volta;
+    const rastro = [[e.timeStamp, e.clientX, e.clientY]];   // últimos 100 ms do mouse, pra velocidade do arremesso
     const move = e => {
-      [pos.x, pos.y] = afasta(e.clientX - ox, e.clientY - oy); aplica();
+      // segurando, ele pode passar por cima da tela compartilhada; só não sai da janela
+      pos = { x: Math.min(largura() - W, Math.max(0, e.clientX - ox)), y: Math.min(chao(), Math.max(0, e.clientY - oy)) }; aplica();
       pulo.style.rotate = Math.max(-35, Math.min(35, (e.clientX - antes) * 2.5)) + 'deg';
       antes = e.clientX;
+      rastro.push([e.timeStamp, e.clientX, e.clientY]);
+      while (rastro.length > 2 && e.timeStamp - rastro[0][0] > 100) rastro.shift();
       clearTimeout(volta); volta = setTimeout(() => pulo.style.rotate = '', 120);
     };
-    const fim = () => {
+    const fim = e => {
       removeEventListener('pointermove', move); removeEventListener('pointerup', fim); removeEventListener('pointercancel', fim);
-      clearTimeout(volta); pulo.style.rotate = '';
+      const [t0, x0, y0] = rastro[0], [t1, x1, y1] = rastro.at(-1), lim = v => Math.max(-4, Math.min(4, v));
+      // mouse parado antes de soltar = só larga
+      lance = e.type === 'pointerup' && e.timeStamp - t1 < 60 && t1 > t0 ? [lim((x1 - x0) / (t1 - t0)), lim((y1 - y0) / (t1 - t0))] : [0, 0];
+      clearTimeout(volta); pulo.style.rotate = ''; pulo.style.transformOrigin = '';
       document.documentElement.classList.remove('but-arrastando');
       preso = null; solta();
     };
