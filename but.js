@@ -494,7 +494,6 @@
   botao.onclick = () => {
     ligado = !ligado; marca();
     try { localStorage.setItem('but', ligado ? '1' : '0'); } catch {}
-    if (!ligado) { el.hidden = true; ctl.abort(); }   // para no meio do que estiver fazendo
     checa();
   };
   marca();
@@ -504,7 +503,7 @@
   const visivel = () => ligado && !document.hidden && !document.fullscreenElement;
   let acordar = null;
   function checa() {
-    if (!visivel()) el.hidden = true;
+    if (!visivel()) { el.hidden = true; ctl.abort(); }   // para no meio do que estiver fazendo, pra voltar na hora
     else if (acordar) { acordar(); acordar = null; }
   }
   document.addEventListener('visibilitychange', checa);
