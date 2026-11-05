@@ -414,7 +414,8 @@
     } while (n < 2 || Math.random() < .75);
   }
   /* ---------- Arremesso ---------- */
-  const G = 0.0028, PASSA = 2;   // gravidade (px/ms²); jogado acima dessa velocidade (px/ms) ele atravessa a parede
+  const G = 0.0028, PASSA = 2;   // gravidade (px/ms²); jogado acima dessa velocidade (px/ms) ele pode atravessar a parede
+  const CHANCE = .35;            // chance de atravessar quando vem rápido; no resto das vezes bate e quica
   const SAIU = ['e', 'd', 't'];  // saiu da janela pela esquerda, direita ou teto
   let lance = [0, 0];            // velocidade do mouse ao soltar
   // Amassa contra a parede/chão: escala a partir do lado que bateu e volta
@@ -422,18 +423,18 @@
     { transform: `scale(${sx},${sy})`, transformOrigin: origem }, { transform: 'none', transformOrigin: origem }
   ], { duration: 280, easing: 'ease-out' });
   // Voa com gravidade, quica nas paredes, teto e chão, desliza sentado até parar.
-  // Resolve 'chao', 'moldura' (caiu em cima da tela) ou um de SAIU.
+  // Atravessa a tela compartilhada (sem colisão nela). Resolve 'chao' ou um de SAIU.
   const voo = (vx, vy, podePassar) => passo(ok => {
     let antes = performance.now(), id, saindo = null, deslizando = false, olhoFechado = 0;
     const acaba = r => { pulo.style.rotate = ''; ok(r); };
-    // Bateu numa parede: se veio rápido, passa direto (só na primeira batida depois de jogado)
+    // Bateu numa parede: se veio rápido, às vezes passa direto (só na primeira batida depois de jogado)
     const bateu = (lado, v) => {
-      if (podePassar && Math.abs(v) > PASSA) saindo = lado;
+      if (podePassar && Math.abs(v) > PASSA && Math.random() < CHANCE) saindo = lado;
       podePassar = false;
       return !saindo;
     };
     const quadro = agora => {
-      const dt = Math.min(32, agora - antes), m = moldura(), fim = largura() - W, y0 = pos.y;
+      const dt = Math.min(32, agora - antes), fim = largura() - W;
       antes = agora;
       if (!deslizando) vy += G * dt;
       pos.x += vx * dt; pos.y += vy * dt;
@@ -446,9 +447,6 @@
       if (pos.x > fim && vx > 0 && bateu('d', vx)) { pos.x = fim; vx *= -.45; amassa('right center', .6, 1.15); olhoFechado = agora + 300; }
       if (pos.y < 0 && vy < 0 && bateu('t', vy)) { pos.y = 0; vy *= -.4; amassa('center top', 1.15, .6); olhoFechado = agora + 300; }
       if (!saindo) {
-        if (m && vy > 0 && y0 + H <= m.t && pos.y + H > m.t && pos.x + W > m.l && pos.x < m.r) {   // caiu em cima da moldura
-          pos.y = m.t - H; aplica(); amassa('center bottom', 1.25, .7); return acaba('moldura');
-        }
         if (pos.y > chao() && vy > 0) {
           pos.y = chao();
           if (vy > .35) { vy *= -.35; vx *= .75; amassa('center bottom', 1.3, .65); olhoFechado = agora + 200; }
@@ -505,8 +503,7 @@
       pos = { x: px, y: py }; aplica();
       r = await voo(vx, vy, false);
     }
-    if (r === 'moldura') await descer('serio');
-    else if (bate(moldura(), pos.x, pos.y)) {   // parou atrás da tela: pula pro lado dela
+    if (bate(moldura(), pos.x, pos.y)) {   // parou atrás da tela: pula pro lado dela
       const [x, y] = afasta(pos.x, pos.y);
       vira(x > pos.x); poe('pulando serio');
       await salto(x, y, 40, 400);
