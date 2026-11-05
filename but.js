@@ -11,18 +11,18 @@
   // Guarda-roupa: [peça, nome, [[id, nome, variáveis CSS]]]. Formas extras ficam no desenho com a classe so-<peça>-<id>.
   const ROUPAS = [
     ['chapeu', 'Chapéu', [['bone', 'Boné'], ['gorro', 'Gorro'], ['cartola', 'Cartola'], ['festa', 'Festa'], ['nada', 'Nada']]],
-    ['camisa', 'Camisa', [['moletom', 'Moletom', '--camisa:#7d1027;--camisa-lado:#5e0b1d;--gola:#f6c21b'],
-      ['listrada', 'Listrada', '--camisa:url(#but-listras);--camisa-lado:#1d2d5c;--gola:#1d2d5c'],
-      ['amarela', 'Amarelinha', '--camisa:#f6c21b;--camisa-lado:#c99a0c;--gola:#1f8a3b'],
-      ['nada', 'Nada', '--camisa:var(--pele);--camisa-lado:var(--pele-lado)']]],
+    ['camisa', 'Camisa', [['moletom', 'Moletom', '--camisa:#7d1027;--gola:#f6c21b'],
+      ['listrada', 'Listrada', '--camisa:url(#but-listras);--gola:#1d2d5c'],
+      ['amarela', 'Amarelinha', '--camisa:#f6c21b;--gola:#1f8a3b'],
+      ['nada', 'Nada', '--camisa:var(--pele)']]],
     ['calca', 'Calça', [['vinho', 'Vinho', '--perna:#7d1027'], ['jeans', 'Jeans', '--perna:#3b5b8c'], ['bermuda', 'Bermuda', '--perna:var(--pele)'], ['nada', 'Nada', '--perna:var(--pele)']]],
     ['sapato', 'Sapato', [['vinho', 'Vinho', '--sapato:#7d1027'], ['tenis', 'Tênis branco', '--sapato:#fff'], ['jordan', 'Tênis gigante'], ['nada', 'Descalço', '--sapato:var(--pele)']]],
   ];
   const PADRAO = { chapeu: 'bone', camisa: 'moletom', calca: 'vinho', sapato: 'vinho' };
 
   document.head.insertAdjacentHTML('beforeend', `<style>
-  .but{--pele:#fbf3ea;--pele-lado:#f2cdb8}
-  .but .camisa{fill:var(--camisa)} .but .camisa-lado{fill:var(--camisa-lado)} .but .gola{stroke:var(--gola)}
+  .but{--pele:#fbf3ea}
+  .but .camisa{fill:var(--camisa)} .but .gola{stroke:var(--gola)}
   .but .perna{fill:var(--perna)} .but .pe{fill:var(--sapato)}
   .but [class^=so-]{display:none}
   .but[data-camisa=nada] .roupa,.but[data-sapato=jordan] .pe{display:none}
@@ -142,16 +142,14 @@
   const perna = (lado, dx) => `<g class="perna-${lado}"><rect class="perna" x="${32 + dx}" y="104" width="16" height="22" rx="4"/>
       <path class="so-calca-bermuda" d="M${32 + dx} 104 h16 v14 h-16Z" fill="#c8a86b"/>
       <ellipse class="pe" cx="${36 + dx + (dx && 2)}" cy="128" rx="13" ry="8"/>${tenis(dx)}</g>`;
-  // Gorro e cartola: frente com o lado em perspectiva (x0 = esquerda da aba, lado = tem a face lateral)
-  const gorro = (c, lado) => `<g class="so-chapeu-gorro"><circle cx="${c}" cy="-3" r="8" fill="#fbf3ea"/>
-      <path d="M18 22 Q18 0 ${c} 0 Q${lado ? '92 0 103 14' : '88 0 88 22'}Z" fill="#1f6f8b"/>
-      <path d="${lado ? 'M14 20 H88 L106 12 V24 L88 34 H14Z M88 20 V34' : 'M14 20 H92 V34 H14Z'}" fill="#17556b"/>
+  const gorro = `<g class="so-chapeu-gorro"><circle cx="53" cy="-3" r="8" fill="#fbf3ea"/>
+      <path d="M18 22 Q18 0 53 0 Q88 0 88 22Z" fill="#1f6f8b"/>
+      <path d="M14 20 H92 V34 H14Z" fill="#17556b"/>
       <path d="M24 22 V32 M34 22 V32 M44 22 V32 M54 22 V32 M64 22 V32 M74 22 V32 M84 22 V32" stroke-width="2"/></g>`;
-  const cartola = (x, lado) => `<g class="so-chapeu-cartola">
-      ${lado ? '<path d="M86 -24 L98 -30 V18 L86 24Z" fill="#3a2f36"/><path d="M86 10 L98 4 V14 L86 20Z" fill="#b5121f"/>' : ''}
-      <rect x="${x}" y="-24" width="62" height="48" rx="2" fill="#2a2228"/>
-      <rect x="${x}" y="10" width="62" height="10" fill="#e01b2f"/>
-      <path d="${lado ? 'M6 24 H104 L118 17 V23 L104 32 H6 Q2 28 6 24Z' : 'M6 24 H100 Q104 28 100 32 H6 Q2 28 6 24Z'}" fill="#2a2228"/></g>`;
+  const cartola = `<g class="so-chapeu-cartola">
+      <rect x="22" y="-24" width="62" height="48" rx="2" fill="#2a2228"/>
+      <rect x="22" y="10" width="62" height="10" fill="#e01b2f"/>
+      <path d="M6 24 H100 Q104 28 100 32 H6 Q2 28 6 24Z" fill="#2a2228"/></g>`;
   const festa = (c, giro) => `<g class="so-chapeu-festa" transform="rotate(${giro} ${c} 30)">
       <path d="M${c - 20} 30 L${c} -24 L${c + 20} 30Z" fill="#e01b2f"/>
       <g fill="#f6c21b" stroke="none"><circle cx="${c - 6}" cy="20" r="3.5"/><circle cx="${c + 6}" cy="12" r="3.5"/><circle cx="${c - 2}" cy="2" r="3"/><circle cx="${c + 2}" cy="-12" r="2.5"/></g>
@@ -164,12 +162,8 @@
     <g class="pernas">${perna('e', 0)}${perna('d', 28)}</g>
     <g class="tronco">
       <g class="braco-e"><rect class="camisa" x="10" y="80" width="14" height="22" rx="7"/><circle cx="16" cy="104" r="7" fill="#fbf3ea"/></g>
-      <path d="M86 28 L102 20 V66 L86 76Z" fill="#f2cdb8" stroke="none"/>
-      <path class="camisa-lado" d="M86 76 L102 66 V100 L86 112Z" stroke="none"/>
-      <path d="M86 28 L102 20 V100 L86 112" fill="none"/>
       <rect class="camisa" x="20" y="28" width="66" height="84" rx="3"/>
       <path d="M22 30 H84 V76 Q53 96 22 76Z" fill="#fbf3ea" stroke="none"/>
-      <path d="M20 28 L36 20 H102 L86 28Z" fill="#fff8f0"/><!-- tampa da caixa, aparece sem chapéu -->
       <g class="roupa">
         <path d="M20 74 Q53 98 86 74" fill="none"/>
         <path d="M30 80 Q53 104 76 80" fill="none" stroke-width="7"/>
@@ -184,7 +178,7 @@
         <path d="M84 22 Q104 16 110 28 Q98 32 88 31" fill="#7d1027"/>
         <text class="txt" x="52" y="25" font-size="17" font-weight="700" text-anchor="middle" fill="#fff" stroke="none" font-family="'Comic Sans MS','Segoe Print',cursive">But</text>
       </g>
-      ${gorro(54, true)}${cartola(24, true)}${festa(58, 10)}
+      ${gorro}${cartola}${festa(58, 10)}
       <g class="abertos">
         <path d="M30 51 h17 M57 51 h17"/>
         <rect x="31" y="52" width="14" height="10" rx="5" fill="#fff" stroke-width="3"/>
@@ -209,7 +203,7 @@
         <path d="M74 94 H106 L101 120 H79Z" fill="none"/>
       </g>
     </g>
-    <!-- de costas: reto, sem perspectiva, mesmo tamanho de caixa da frente -->
+    <!-- de costas: mesmo tamanho de caixa da frente -->
     <g class="costas">
       <rect class="camisa" x="6" y="80" width="14" height="22" rx="7"/><circle cx="13" cy="104" r="7" fill="#fbf3ea"/>
       <rect class="camisa" x="86" y="80" width="14" height="22" rx="7"/><circle cx="93" cy="104" r="7" fill="#fbf3ea"/>
@@ -228,7 +222,7 @@
         <path d="M43 26.5 H63" stroke-width="3"/>
         <circle cx="53" cy="4" r="3" fill="#7d1027" stroke-width="2.5"/>
       </g>
-      ${gorro(53, false)}${cartola(22, false)}${festa(53, -10)}
+      ${gorro}${cartola}${festa(53, -10)}
     </g>
   </g></svg>`;
   document.body.insertAdjacentHTML('beforeend', `<div class="but" id="but" aria-hidden="true" hidden><div class="pulo">${desenho()}<span class="fala"></span></div></div>`);
