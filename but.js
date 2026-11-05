@@ -73,10 +73,10 @@
   .but[data-p~=correndo] .tronco{animation:but-bob .13s infinite alternate}
   .but[data-p~=correndo] .tudo{transform:rotate(-9deg)}
   /* braços: balançam juntos andando, pra cima no pulo, tchau encarando, chacoalham rindo */
-  .but[data-p~=andando] .braco-e{animation:but-balanca .5s infinite alternate ease-in-out}
-  .but[data-p~=andando] .braco-d{animation:but-balanca .5s infinite alternate ease-in-out}
-  .but[data-p~=correndo] .braco-e{animation:but-balanca-forte .26s infinite alternate ease-in-out}
-  .but[data-p~=correndo] .braco-d{animation:but-balanca-forte .26s infinite alternate ease-in-out}
+  .but[data-p~=andando] .braco-e{animation:but-balanca .75s infinite alternate ease-in-out}
+  .but[data-p~=andando] .braco-d{animation:but-balanca .75s infinite alternate ease-in-out}
+  .but[data-p~=correndo] .braco-e{animation:but-balanca-forte .4s infinite alternate ease-in-out}
+  .but[data-p~=correndo] .braco-d{animation:but-balanca-forte .4s infinite alternate ease-in-out}
   .but[data-p~=pulando] .braco-e{transform:rotate(140deg)}
   .but[data-p~=pulando] .braco-d{transform:rotate(-140deg)}
   .but[data-p~=encarando] .braco-d{animation:but-tchau 4s infinite}
