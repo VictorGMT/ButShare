@@ -53,7 +53,7 @@
   .but-botao[aria-pressed=false]{color:var(--apagado)}
   .but .tronco{transform-origin:60px 120px}
   .but .braco-d{transform-origin:91px 84px;transition:transform .2s}
-  .but .braco-e{transform-origin:17px 82px}
+  .but .braco-e{transform-origin:17px 82px;transition:transform .2s}
   .but .perna-e{transform-origin:36px 128px}
   .but .perna-d{transform-origin:66px 128px}
   .but .pupila{transition:transform .3s}
@@ -72,6 +72,14 @@
   .but[data-p~=correndo] .perna-d{animation:but-passo .26s -.13s infinite}
   .but[data-p~=correndo] .tronco{animation:but-bob .13s infinite alternate}
   .but[data-p~=correndo] .tudo{transform:rotate(-9deg)}
+  /* braços: balançam ao contrário um do outro andando, pra cima no pulo, tchau encarando, chacoalham rindo */
+  .but[data-p~=andando] .braco-e{animation:but-balanca .5s infinite alternate ease-in-out}
+  .but[data-p~=andando] .braco-d{animation:but-balanca .5s -.5s infinite alternate ease-in-out}
+  .but[data-p~=correndo] .braco-e{animation:but-balanca-forte .26s infinite alternate ease-in-out}
+  .but[data-p~=correndo] .braco-d{animation:but-balanca-forte .26s -.26s infinite alternate ease-in-out}
+  .but[data-p~=pulando] .braco-e{transform:rotate(140deg)}
+  .but[data-p~=pulando] .braco-d{transform:rotate(-140deg)}
+  .but[data-p~=encarando] .braco-d{animation:but-tchau 4s infinite}
   .but[data-p~=agachado] .tudo{transform:scale(1.12,.84)}
   .but[data-p~=pulando] .tudo{transform:scale(.92,1.08)}
   .but[data-p~=pulando] .pernas{transform:translateY(-5px)}
@@ -92,7 +100,8 @@
 
   .but[data-p~=rindo] .abertos,.but[data-p~=rindo] .boca,.but[data-p~=rindo] .mastiga,.but[data-p~=rindo] .milho{display:none}
   .but[data-p~=rindo] .feliz,.but[data-p~=rindo] .riso{display:inline}
-  .but[data-p~=rindo] .braco-d{animation:none}
+  .but[data-p~=rindo] .braco-e{animation:but-chacoalha .18s infinite alternate}
+  .but[data-p~=rindo] .braco-d{animation:but-chacoalha .18s -.09s infinite alternate}
   .but[data-p~=rindo] .tronco{animation:but-ri .18s infinite alternate}
   .but[data-p~=sentado][data-p~=rindo] .tronco{animation-name:but-ri-sentado}
 
@@ -119,6 +128,10 @@
   @keyframes but-ri-sentado{from{transform:translateY(16px) rotate(-3deg)}to{transform:translateY(14px) rotate(3deg)}}
   @keyframes but-cima{from{transform:rotate(-1deg)}to{transform:rotate(-5deg) translateY(-2px)}}
   @keyframes but-balanco{from{transform:rotate(-6deg)}to{transform:rotate(6deg)}}
+  @keyframes but-balanca{from{transform:rotate(-14deg)}to{transform:rotate(14deg)}}
+  @keyframes but-balanca-forte{from{transform:rotate(-35deg)}to{transform:rotate(35deg)}}
+  @keyframes but-tchau{0%,55%,100%{transform:none}62%,93%{transform:rotate(-150deg)}70%,78%,86%{transform:rotate(-120deg)}}
+  @keyframes but-chacoalha{from{transform:rotate(-8deg)}to{transform:rotate(18deg)}}
   @keyframes but-chute{from{transform:rotate(-12deg)}to{transform:rotate(12deg)}}
   @keyframes but-agita{from{transform:rotate(25deg)}to{transform:rotate(60deg)}}
   @keyframes but-agita-e{from{transform:rotate(-25deg)}to{transform:rotate(-60deg)}}
