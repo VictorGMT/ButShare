@@ -72,11 +72,11 @@
   .but[data-p~=correndo] .perna-d{animation:but-passo .26s -.13s infinite}
   .but[data-p~=correndo] .tronco{animation:but-bob .13s infinite alternate}
   .but[data-p~=correndo] .tudo{transform:rotate(-9deg)}
-  /* braços: balançam ao contrário um do outro andando, pra cima no pulo, tchau encarando, chacoalham rindo */
+  /* braços: balançam juntos andando, pra cima no pulo, tchau encarando, chacoalham rindo */
   .but[data-p~=andando] .braco-e{animation:but-balanca .5s infinite alternate ease-in-out}
-  .but[data-p~=andando] .braco-d{animation:but-balanca .5s -.5s infinite alternate ease-in-out}
+  .but[data-p~=andando] .braco-d{animation:but-balanca .5s infinite alternate ease-in-out}
   .but[data-p~=correndo] .braco-e{animation:but-balanca-forte .26s infinite alternate ease-in-out}
-  .but[data-p~=correndo] .braco-d{animation:but-balanca-forte .26s -.26s infinite alternate ease-in-out}
+  .but[data-p~=correndo] .braco-d{animation:but-balanca-forte .26s infinite alternate ease-in-out}
   .but[data-p~=pulando] .braco-e{transform:rotate(140deg)}
   .but[data-p~=pulando] .braco-d{transform:rotate(-140deg)}
   .but[data-p~=encarando] .braco-d{animation:but-tchau 4s infinite}
@@ -128,8 +128,8 @@
   @keyframes but-ri-sentado{from{transform:translateY(16px) rotate(-3deg)}to{transform:translateY(14px) rotate(3deg)}}
   @keyframes but-cima{from{transform:rotate(-1deg)}to{transform:rotate(-5deg) translateY(-2px)}}
   @keyframes but-balanco{from{transform:rotate(-6deg)}to{transform:rotate(6deg)}}
-  @keyframes but-balanca{from{transform:rotate(-14deg)}to{transform:rotate(14deg)}}
-  @keyframes but-balanca-forte{from{transform:rotate(-35deg)}to{transform:rotate(35deg)}}
+  @keyframes but-balanca{0%{transform:rotate(-32deg)}50%{transform:translateY(-3px)}100%{transform:rotate(32deg)}}
+  @keyframes but-balanca-forte{0%{transform:rotate(-55deg)}50%{transform:translateY(-4px)}100%{transform:rotate(55deg)}}
   @keyframes but-tchau{0%,55%,100%{transform:none}62%,93%{transform:rotate(-150deg)}70%,78%,86%{transform:rotate(-120deg)}}
   @keyframes but-chacoalha{from{transform:rotate(-8deg)}to{transform:rotate(18deg)}}
   @keyframes but-chute{from{transform:rotate(-12deg)}to{transform:rotate(12deg)}}
