@@ -8,7 +8,37 @@
   const COMER = 2400;               // um ciclo da pipoca, igual às animações mao/milho/mastiga
   const PARA = 'para';              // motivo de interrupção: o espectador pegou o But
 
+  // Guarda-roupa: [peça, nome, [[id, nome, variáveis CSS]]]. Formas extras ficam no desenho com a classe so-<peça>-<id>.
+  const ROUPAS = [
+    ['chapeu', 'Chapéu', [['bone', 'Boné'], ['gorro', 'Gorro'], ['cartola', 'Cartola'], ['festa', 'Festa'], ['nada', 'Nada']]],
+    ['camisa', 'Camisa', [['moletom', 'Moletom', '--camisa:#7d1027;--camisa-lado:#5e0b1d;--gola:#f6c21b'],
+      ['listrada', 'Listrada', '--camisa:url(#but-listras);--camisa-lado:#1d2d5c;--gola:#1d2d5c'],
+      ['amarela', 'Amarelinha', '--camisa:#f6c21b;--camisa-lado:#c99a0c;--gola:#1f8a3b'],
+      ['nada', 'Nada', '--camisa:var(--pele);--camisa-lado:var(--pele-lado)']]],
+    ['calca', 'Calça', [['vinho', 'Vinho', '--perna:#7d1027'], ['jeans', 'Jeans', '--perna:#3b5b8c'], ['bermuda', 'Bermuda', '--perna:var(--pele)'], ['nada', 'Nada', '--perna:var(--pele)']]],
+    ['sapato', 'Sapato', [['vinho', 'Vinho', '--sapato:#7d1027'], ['tenis', 'Tênis branco', '--sapato:#fff'], ['jordan', 'Tênis gigante'], ['nada', 'Descalço', '--sapato:var(--pele)']]],
+  ];
+  const PADRAO = { chapeu: 'bone', camisa: 'moletom', calca: 'vinho', sapato: 'vinho' };
+
   document.head.insertAdjacentHTML('beforeend', `<style>
+  .but{--pele:#fbf3ea;--pele-lado:#f2cdb8}
+  .but .camisa{fill:var(--camisa)} .but .camisa-lado{fill:var(--camisa-lado)} .but .gola{stroke:var(--gola)}
+  .but .perna{fill:var(--perna)} .but .pe{fill:var(--sapato)}
+  .but [class^=so-]{display:none}
+  .but[data-camisa=nada] .roupa,.but[data-sapato=jordan] .pe{display:none}
+  /* sentado, o tênis gigante desfaz a inclinação da perna e o direito aponta pra fora, senão um cruza o outro */
+  .but[data-p~=sentado] .perna-e .so-sapato-jordan{transform:translate(40px,136px) rotate(14deg) scale(1.2,1) translate(-40px,-136px)}
+  .but[data-p~=sentado] .perna-d .so-sapato-jordan{transform:translate(68px,136px) rotate(-14deg) scale(-1.2,1) translate(-40px,-136px)}
+  ${ROUPAS.flatMap(([s, , itens]) => itens.map(([id, , v = '']) => `.but[data-${s}=${id}]{${v}} .but[data-${s}=${id}] .so-${s}-${id}{display:inline}`)).join('\n  ')}
+  .but-armario{max-width:620px;margin:auto;color:var(--tinta)}
+  .but-armario::backdrop{background:rgba(20,5,9,.82)}
+  .but-vitrine{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:center}
+  .but.but-previa{position:relative;width:150px;height:175px;margin:40px auto 0;transform:none}
+  .but-previa .tudo{pointer-events:none}
+  .but-pecas{flex:1;min-width:240px}
+  .but-opcoes{display:flex;flex-wrap:wrap;gap:8px}
+  .but-opcoes button{padding:7px 12px;font-size:13px}
+  .but-opcoes button[aria-pressed=true]{background:var(--vermelho-btn);color:#fff}
   .but{position:fixed;left:0;top:0;width:${W}px;height:${H}px;z-index:5;pointer-events:none;will-change:transform}
   .but svg{width:100%;height:100%;overflow:visible;display:block}
   .but .pulo{transition:rotate .15s}
@@ -68,6 +98,7 @@
 
   /* de costas pra quem assiste, olhando pra cima, pra tela */
   .but[data-p~=costas] .tronco{display:none}
+  .but[data-p~=costas] .so-sapato-jordan:not(.tras),.but:not([data-p~=costas]) .so-sapato-jordan.tras{display:none}
   .but[data-p~=costas] .costas{display:inline;transform-origin:53px 124px;animation:but-cima 2.6s ease-in-out infinite alternate}
 
   .but[data-p~=pendurado] .braco-d{transform:rotate(175deg)}
@@ -98,28 +129,62 @@
   @keyframes but-mastiga{0%,40%,50%,64%,78%,92%,100%{transform:scale(1,.4)}45%{transform:scale(1.2,1.6)}57%,71%,85%{transform:none}}
   </style>`);
 
-  // Desenho (olhando pra esquerda; .dir espelha). Contorno herdado do <g> de fora.
-  document.body.insertAdjacentHTML('beforeend', `<div class="but" id="but" aria-hidden="true" hidden><div class="pulo">
-  <svg viewBox="0 0 120 140"><g class="tudo" stroke="#1a0a0e" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
-    <g class="pernas" fill="#7d1027">
-      <g class="perna-e"><rect x="32" y="104" width="16" height="22" rx="4"/><ellipse cx="36" cy="128" rx="13" ry="8"/></g>
-      <g class="perna-d"><rect x="60" y="104" width="16" height="22" rx="4"/><ellipse cx="66" cy="128" rx="13" ry="8"/></g>
-    </g>
+  // Tênis gigante de cano alto (pé esquerdo; o direito é o mesmo, deslocado). Aumentado a partir da sola, pra continuar no chão.
+  const tenis = dx => `<g class="so-sapato-jordan" stroke-width="2.8" transform="translate(${dx + 40} 136) scale(1.55 1) translate(-40 -136)">
+      <path d="M30 116 H50 V126 Q56 128 56 131 H10 Q10 124 19 123 L30 121Z" fill="#fff"/>
+      <path d="M10 131 Q10 124 19 123 L25 122 Q28 127 24 131Z M43 116 H50 V126 Q56 128 56 131 H43Z" fill="#e01b2f" stroke="none"/>
+      <path d="M30 116 H50 V126 Q56 128 56 131 H10 Q10 124 19 123 L30 121Z" fill="none"/>
+      <path d="M31 124 l6 -3 M32 128 l6 -3" stroke-width="1.6"/>
+      <path d="M8 130 H58 Q59 136 53 136 H13 Q7 136 8 130Z" fill="#fff"/></g>
+    <g class="so-sapato-jordan tras" stroke-width="2.8" transform="translate(${dx})"><!-- de costas: o calcanhar -->
+      <path d="M28 131 V118 Q28 114 32 114 H48 Q52 114 52 118 V131Z" fill="#fff"/><path d="M35 114.5 H45 V127 Q40 130 35 127Z" fill="#e01b2f"/>
+      <path d="M25 130 H55 Q56 136 50 136 H30 Q24 136 25 130Z" fill="#fff"/></g>`;
+  const perna = (lado, dx) => `<g class="perna-${lado}"><rect class="perna" x="${32 + dx}" y="104" width="16" height="22" rx="4"/>
+      <path class="so-calca-bermuda" d="M${32 + dx} 104 h16 v14 h-16Z" fill="#c8a86b"/>
+      <ellipse class="pe" cx="${36 + dx + (dx && 2)}" cy="128" rx="13" ry="8"/>${tenis(dx)}</g>`;
+  // Gorro e cartola: frente com o lado em perspectiva (x0 = esquerda da aba, lado = tem a face lateral)
+  const gorro = (c, lado) => `<g class="so-chapeu-gorro"><circle cx="${c}" cy="-3" r="8" fill="#fbf3ea"/>
+      <path d="M18 22 Q18 0 ${c} 0 Q${lado ? '92 0 103 14' : '88 0 88 22'}Z" fill="#1f6f8b"/>
+      <path d="${lado ? 'M14 20 H88 L106 12 V24 L88 34 H14Z M88 20 V34' : 'M14 20 H92 V34 H14Z'}" fill="#17556b"/>
+      <path d="M24 22 V32 M34 22 V32 M44 22 V32 M54 22 V32 M64 22 V32 M74 22 V32 M84 22 V32" stroke-width="2"/></g>`;
+  const cartola = (x, lado) => `<g class="so-chapeu-cartola">
+      ${lado ? '<path d="M86 -24 L98 -30 V18 L86 24Z" fill="#3a2f36"/><path d="M86 10 L98 4 V14 L86 20Z" fill="#b5121f"/>' : ''}
+      <rect x="${x}" y="-24" width="62" height="48" rx="2" fill="#2a2228"/>
+      <rect x="${x}" y="10" width="62" height="10" fill="#e01b2f"/>
+      <path d="${lado ? 'M6 24 H104 L118 17 V23 L104 32 H6 Q2 28 6 24Z' : 'M6 24 H100 Q104 28 100 32 H6 Q2 28 6 24Z'}" fill="#2a2228"/></g>`;
+  const festa = (c, giro) => `<g class="so-chapeu-festa" transform="rotate(${giro} ${c} 30)">
+      <path d="M${c - 20} 30 L${c} -24 L${c + 20} 30Z" fill="#e01b2f"/>
+      <g fill="#f6c21b" stroke="none"><circle cx="${c - 6}" cy="20" r="3.5"/><circle cx="${c + 6}" cy="12" r="3.5"/><circle cx="${c - 2}" cy="2" r="3"/><circle cx="${c + 2}" cy="-12" r="2.5"/></g>
+      <circle cx="${c}" cy="-26" r="6" fill="#f6c21b"/></g>`;
+
+  // Desenho (olhando pra esquerda; .dir espelha). Contorno herdado do <g> de fora. Pelado é um quadrado de pele com braços e pernas.
+  const desenho = () => `<svg viewBox="0 0 120 140">
+  <defs><pattern id="but-listras" patternUnits="userSpaceOnUse" width="12" height="12"><rect width="12" height="12" fill="#fbf3ea"/><rect width="12" height="6" fill="#1d2d5c"/></pattern></defs>
+  <g class="tudo" stroke="#1a0a0e" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+    <g class="pernas">${perna('e', 0)}${perna('d', 28)}</g>
     <g class="tronco">
-      <g class="braco-e"><rect x="10" y="80" width="14" height="22" rx="7" fill="#7d1027"/><circle cx="16" cy="104" r="7" fill="#fbf3ea"/></g>
+      <g class="braco-e"><rect class="camisa" x="10" y="80" width="14" height="22" rx="7"/><circle cx="16" cy="104" r="7" fill="#fbf3ea"/></g>
       <path d="M86 28 L102 20 V66 L86 76Z" fill="#f2cdb8" stroke="none"/>
-      <path d="M86 76 L102 66 V100 L86 112Z" fill="#5e0b1d" stroke="none"/>
+      <path class="camisa-lado" d="M86 76 L102 66 V100 L86 112Z" stroke="none"/>
       <path d="M86 28 L102 20 V100 L86 112" fill="none"/>
-      <rect x="20" y="28" width="66" height="84" rx="3" fill="#7d1027"/>
+      <rect class="camisa" x="20" y="28" width="66" height="84" rx="3"/>
       <path d="M22 30 H84 V76 Q53 96 22 76Z" fill="#fbf3ea" stroke="none"/>
-      <path d="M20 74 Q53 98 86 74" fill="none"/>
-      <path d="M30 80 Q53 104 76 80" fill="none" stroke-width="7"/>
-      <path d="M30 80 Q53 104 76 80" fill="none" stroke="#f6c21b" stroke-width="3.5"/>
-      <circle cx="53" cy="100" r="9" fill="#f6c21b" stroke-width="3"/>
-      <text class="txt" x="53" y="104.5" font-size="12" font-weight="800" text-anchor="middle" fill="#1a0a0e" stroke="none" font-family="sans-serif">B</text>
-      <path d="M18 32 Q18 4 54 4 Q88 4 90 30Z" fill="#7d1027"/>
-      <path d="M84 22 Q104 16 110 28 Q98 32 88 31" fill="#7d1027"/>
-      <text class="txt" x="52" y="25" font-size="17" font-weight="700" text-anchor="middle" fill="#fff" stroke="none" font-family="'Comic Sans MS','Segoe Print',cursive">But</text>
+      <path d="M20 28 L36 20 H102 L86 28Z" fill="#fff8f0"/><!-- tampa da caixa, aparece sem chapéu -->
+      <g class="roupa">
+        <path d="M20 74 Q53 98 86 74" fill="none"/>
+        <path d="M30 80 Q53 104 76 80" fill="none" stroke-width="7"/>
+        <path class="gola" d="M30 80 Q53 104 76 80" fill="none" stroke-width="3.5"/>
+      </g>
+      <g class="so-camisa-moletom">
+        <circle cx="53" cy="100" r="9" fill="#f6c21b" stroke-width="3"/>
+        <text class="txt" x="53" y="104.5" font-size="12" font-weight="800" text-anchor="middle" fill="#1a0a0e" stroke="none" font-family="sans-serif">B</text>
+      </g>
+      <g class="so-chapeu-bone">
+        <path d="M18 32 Q18 4 54 4 Q88 4 90 30Z" fill="#7d1027"/>
+        <path d="M84 22 Q104 16 110 28 Q98 32 88 31" fill="#7d1027"/>
+        <text class="txt" x="52" y="25" font-size="17" font-weight="700" text-anchor="middle" fill="#fff" stroke="none" font-family="'Comic Sans MS','Segoe Print',cursive">But</text>
+      </g>
+      ${gorro(54, true)}${cartola(24, true)}${festa(58, 10)}
       <g class="abertos">
         <path d="M30 51 h17 M57 51 h17"/>
         <rect x="31" y="52" width="14" height="10" rx="5" fill="#fff" stroke-width="3"/>
@@ -134,7 +199,7 @@
       <path class="boca" d="M48 72 h8" stroke-width="3"/>
       <path class="riso" d="M45 68 h18 q-2 12 -9 12 q-7 0 -9 -12Z" fill="#5a0d1a" stroke-width="3"/>
       <ellipse class="mastiga" cx="52" cy="72" rx="4" ry="2.5" fill="#5a0d1a" stroke-width="2.5"/>
-      <g class="braco-d"><rect x="84" y="80" width="14" height="24" rx="7" fill="#7d1027"/><circle cx="92" cy="106" r="7" fill="#fbf3ea"/></g>
+      <g class="braco-d"><rect class="camisa" x="84" y="80" width="14" height="24" rx="7"/><circle cx="92" cy="106" r="7" fill="#fbf3ea"/></g>
       <circle class="milho" r="4.5" fill="#fff6d8" stroke-width="2.5"/>
       <g class="balde" stroke-width="2.5">
         <circle cx="79" cy="91" r="6" fill="#fff6d8"/><circle cx="101" cy="91" r="6" fill="#fff6d8"/>
@@ -146,20 +211,27 @@
     </g>
     <!-- de costas: reto, sem perspectiva, mesmo tamanho de caixa da frente -->
     <g class="costas">
-      <rect x="6" y="80" width="14" height="22" rx="7" fill="#7d1027"/><circle cx="13" cy="104" r="7" fill="#fbf3ea"/>
-      <rect x="86" y="80" width="14" height="22" rx="7" fill="#7d1027"/><circle cx="93" cy="104" r="7" fill="#fbf3ea"/>
-      <rect x="20" y="28" width="66" height="84" rx="3" fill="#7d1027"/>
+      <rect class="camisa" x="6" y="80" width="14" height="22" rx="7"/><circle cx="13" cy="104" r="7" fill="#fbf3ea"/>
+      <rect class="camisa" x="86" y="80" width="14" height="22" rx="7"/><circle cx="93" cy="104" r="7" fill="#fbf3ea"/>
+      <rect class="camisa" x="20" y="28" width="66" height="84" rx="3"/>
+      <path d="M53 93 V100 M31 96 A11 8 0 1 0 52 101 M54 101 A11 8 0 1 0 75 96" fill="none" stroke-width="3"/><!-- bundinha -->
       <path d="M22 30 H84 V66 Q53 80 22 66Z" fill="#fbf3ea" stroke="none"/>
-      <path d="M20 64 Q53 82 86 64" fill="none"/>
-      <path d="M26 68 Q53 86 80 68" fill="none" stroke-width="6.5"/>
-      <path d="M26 68 Q53 86 80 68" fill="none" stroke="#f6c21b" stroke-width="3"/>
-      <path d="M24 22 Q6 16 0 28 Q12 32 22 31" fill="#7d1027"/>
-      <path d="M18 32 Q18 4 53 4 Q88 4 88 32Z" fill="#7d1027"/>
-      <path d="M42 32 Q53 15 64 32Z" fill="#fbf3ea"/>
-      <path d="M43 26.5 H63" stroke-width="3"/>
-      <circle cx="53" cy="4" r="3" fill="#7d1027" stroke-width="2.5"/>
+      <g class="roupa">
+        <path d="M20 64 Q53 82 86 64" fill="none"/>
+        <path d="M26 68 Q53 86 80 68" fill="none" stroke-width="6.5"/>
+        <path class="gola" d="M26 68 Q53 86 80 68" fill="none" stroke-width="3"/>
+      </g>
+      <g class="so-chapeu-bone">
+        <path d="M24 22 Q6 16 0 28 Q12 32 22 31" fill="#7d1027"/>
+        <path d="M18 32 Q18 4 53 4 Q88 4 88 32Z" fill="#7d1027"/>
+        <path d="M42 32 Q53 15 64 32Z" fill="#fbf3ea"/>
+        <path d="M43 26.5 H63" stroke-width="3"/>
+        <circle cx="53" cy="4" r="3" fill="#7d1027" stroke-width="2.5"/>
+      </g>
+      ${gorro(53, false)}${cartola(22, false)}${festa(53, -10)}
     </g>
-  </g></svg><span class="fala"></span></div></div>`);
+  </g></svg>`;
+  document.body.insertAdjacentHTML('beforeend', `<div class="but" id="but" aria-hidden="true" hidden><div class="pulo">${desenho()}<span class="fala"></span></div></div>`);
 
   const el = document.getElementById('but'), pulo = el.firstElementChild, fala = el.querySelector('.fala');
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -335,7 +407,7 @@
     } while (n < 2 || Math.random() < .75);
   }
   /* ---------- Arremesso ---------- */
-  const G = 0.0028, PASSA = 2;   // gravidade (px/ms²); acima dessa velocidade (px/ms) às vezes ele atravessa a parede
+  const G = 0.0028, PASSA = 2;   // gravidade (px/ms²); jogado acima dessa velocidade (px/ms) ele atravessa a parede
   const SAIU = ['e', 'd', 't'];  // saiu da janela pela esquerda, direita ou teto
   let lance = [0, 0];            // velocidade do mouse ao soltar
   // Amassa contra a parede/chão: escala a partir do lado que bateu e volta
@@ -347,9 +419,9 @@
   const voo = (vx, vy, podePassar) => passo(ok => {
     let antes = performance.now(), id, saindo = null, deslizando = false, olhoFechado = 0;
     const acaba = r => { pulo.style.rotate = ''; ok(r); };
-    // Bateu numa parede: às vezes, se veio rápido, passa direto (só na primeira batida)
+    // Bateu numa parede: se veio rápido, passa direto (só na primeira batida depois de jogado)
     const bateu = (lado, v) => {
-      if (podePassar && Math.abs(v) > PASSA && Math.random() < .5) saindo = lado;
+      if (podePassar && Math.abs(v) > PASSA) saindo = lado;
       podePassar = false;
       return !saindo;
     };
@@ -390,7 +462,7 @@
 
   // Explosão: o gif cresce pra cima a partir da base, então gira pra crescer pra dentro da janela,
   // saindo da parede (ou teto) onde ele bate. Som e gif ficam ao lado do but.js.
-  const GIRO = { e: 90, d: -90, t: 180 };
+  const GIRO = { e: 90, d: -90, t: 180, me: -90, md: 90, mt: 0, mb: 180 };   // m* = lados da moldura da tela
   function bum(x, y, lado) {
     new Audio('explosao.mp3').play().catch(() => {});
     const b = document.createElement('img');
@@ -402,18 +474,26 @@
     setTimeout(() => b.remove(), 1950);   // duração do gif
   }
 
-  // Depois de solto: voa com a velocidade do mouse. Se atravessou uma parede, explode numa outra
-  // (parede ou teto) e volta devagar. No fim, sai de cima da tela se parou lá e encara quem jogou, sério.
+  // Depois de solto: voa com a velocidade do mouse. Se atravessou uma parede, 2 s depois explode noutra
+  // (parede, teto ou um lado da moldura da tela, menos a que entrou) e volta devagar. No fim, sai de cima da tela se parou lá e encara quem jogou, sério.
   async function cair() {
     let r = await voo(...lance, true);
     if (SAIU.includes(r)) {
-      await espera(rand(500, 1200));
-      const outros = SAIU.filter(l => l !== r), lado = outros[Math.floor(Math.random() * outros.length)];
-      const L = largura(), y = rand(.15, .5) * chao(), x = rand(.15, .85) * (L - W);
-      const [bx, by, px, py, vx, vy] =
-        lado === 'e' ? [0, y + H / 2, -W / 2, y, .5, -.4] :
-        lado === 'd' ? [L, y + H / 2, L - W / 2, y, -.5, -.4] :
-                       [x + W / 2, 0, x, -H / 2, rand(-.3, .3), .1];
+      await espera(2000);
+      const L = largura(), C = chao(), m = moldura(), y = rand(.15, .5) * C, x = rand(.15, .85) * (L - W);
+      // [base da explosão x, y, onde ele aparece x, y, velocidade]; só os lados da moldura que têm espaço do lado de fora
+      const saidas = {
+        e: [0, y + H / 2, -W / 2, y, .5, -.4], d: [L, y + H / 2, L - W / 2, y, -.5, -.4], t: [x + W / 2, 0, x, -H / 2, rand(-.3, .3), .1],
+      };
+      if (m) {
+        const my = Math.min(C, rand(m.t, m.b - H)), mx = rand(m.l, m.r - W);
+        if (m.l - W >= 0) saidas.me = [m.l, my + H / 2, m.l - W, my, -.5, -.4];
+        if (m.r + W <= L) saidas.md = [m.r, my + H / 2, m.r, my, .5, -.4];
+        if (m.t - H >= 0) saidas.mt = [mx + W / 2, m.t, mx, m.t - H, rand(-.3, .3), -.6];
+        if (m.b <= C) saidas.mb = [mx + W / 2, m.b, mx, m.b, rand(-.3, .3), .1];
+      }
+      const outros = Object.keys(saidas).filter(l => l !== r), lado = outros[Math.floor(Math.random() * outros.length)];
+      const [bx, by, px, py, vx, vy] = saidas[lado];
       bum(bx, by, lado);
       pos = { x: px, y: py }; aplica();
       r = await voo(vx, vy, false);
@@ -428,7 +508,7 @@
     await parado('serio encarando', 1200, 2200);
   }
 
-  const ACOES = [[andar, 26], [z => andar(z, true), 7], [pular, 7], [agarrar, 6], [subir, 9], [encarar, 7], [olhar, 10], [costas, 7], [rir, 7], [sentar, 7], [dormir, 4], [pipoca, 9]];
+  const ACOES = [[andar, 26], [z => andar(z, true), 7], [pular, 7], [agarrar, 6], [subir, 9], [encarar, 10], [olhar, 10], [costas, 7], [rir, 7], [sentar, 7], [dormir, 4], [pipoca, 9]];
   const TOTAL = ACOES.reduce((s, [, p]) => s + p, 0);
   function sorteia() { let n = Math.random() * TOTAL; for (const [f, p] of ACOES) if ((n -= p) < 0) return f; return andar; }
 
@@ -497,7 +577,36 @@
     checa();
   };
   marca();
-  document.querySelector('.direita')?.append(botao);
+  // Guarda-roupa: botão do cabide na barra de cima abre a janela com o But de vitrine; a escolha fica neste navegador
+  let roupa = { ...PADRAO };
+  try { Object.assign(roupa, JSON.parse(localStorage.getItem('but-roupa'))); } catch {}
+  const armario = document.createElement('dialog');
+  armario.className = 'caixa but-armario';
+  armario.setAttribute('aria-labelledby', 'butRoupaTitulo');
+  armario.innerHTML = `<div class="cabeca"><h2 id="butRoupaTitulo">Roupas do But</h2><button class="but-fecha">Fechar</button></div>
+    <div class="but-vitrine"><div class="but but-previa" aria-hidden="true">${desenho()}</div><div class="but-pecas">
+    ${ROUPAS.map(([s, nome, itens]) => `<h3>${nome}</h3><div class="but-opcoes">${itens.map(([id, n]) => `<button data-s="${s}" data-id="${id}">${n}</button>`).join('')}</div>`).join('')}
+    </div></div>`;
+  document.body.append(armario);
+  const veste = () => {
+    for (const b of [el, armario.querySelector('.but-previa')]) Object.assign(b.dataset, roupa);
+    for (const b of armario.querySelectorAll('[data-s]')) b.setAttribute('aria-pressed', roupa[b.dataset.s] === b.dataset.id);
+  };
+  armario.onclick = e => {
+    const b = e.target.closest('button');
+    if (b?.classList.contains('but-fecha')) return armario.close();
+    if (!b?.dataset.s) return;
+    roupa[b.dataset.s] = b.dataset.id; veste();
+    try { localStorage.setItem('but-roupa', JSON.stringify(roupa)); } catch {}
+  };
+  veste();
+  const cabide = document.createElement('button');
+  cabide.className = 'but-botao';
+  cabide.title = cabide.ariaLabel = 'Roupas do But';
+  cabide.innerHTML = `<svg class="ic" viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M10 5a2 2 0 1 1 2 2v1.5"/><path d="M12 8.5 3.4 15.2A1.5 1.5 0 0 0 4.3 18h15.4a1.5 1.5 0 0 0 .9-2.8z"/></svg>`;
+  cabide.onclick = () => armario.showModal();
+  document.querySelector('.direita')?.append(cabide, botao);
 
   // Some (e para de decidir coisas) desligado, em tela cheia ou com a aba escondida
   const visivel = () => ligado && !document.hidden && !document.fullscreenElement;
