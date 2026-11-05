@@ -128,8 +128,8 @@
   @keyframes but-ri-sentado{from{transform:translateY(16px) rotate(-3deg)}to{transform:translateY(14px) rotate(3deg)}}
   @keyframes but-cima{from{transform:rotate(-1deg)}to{transform:rotate(-5deg) translateY(-2px)}}
   @keyframes but-balanco{from{transform:rotate(-6deg)}to{transform:rotate(6deg)}}
-  @keyframes but-balanca{0%{transform:rotate(-32deg)}50%{transform:translateY(-3px)}100%{transform:rotate(32deg)}}
-  @keyframes but-balanca-forte{0%{transform:rotate(-55deg)}50%{transform:translateY(-4px)}100%{transform:rotate(55deg)}}
+  @keyframes but-balanca{from{transform:rotate(-32deg)}to{transform:rotate(32deg)}}
+  @keyframes but-balanca-forte{from{transform:rotate(-55deg)}to{transform:rotate(55deg)}}
   @keyframes but-tchau{0%,55%,100%{transform:none}62%,93%{transform:rotate(-150deg)}70%,78%,86%{transform:rotate(-120deg)}}
   @keyframes but-chacoalha{from{transform:rotate(-8deg)}to{transform:rotate(18deg)}}
   @keyframes but-chute{from{transform:rotate(-12deg)}to{transform:rotate(12deg)}}
