@@ -1,0 +1,73 @@
+# Lança uma versão nova do app: suba "version" no package.json, faça o commit e mande a tag
+#   git tag -a v1.7.2 -m "o que mudou" && git push origin v1.7.2
+# O GitHub gera o instalador do Windows e o AppImage do Linux e publica o Release com tudo que o atualizador precisa.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  audiocap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y g++-mingw-w64-x86-64
+      - run: npm run audiocap
+      - uses: actions/upload-artifact@v4
+        with: { name: audiocap, path: audiocap/audiocap.exe }
+
+  windows:
+    needs: audiocap
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: audiocap, path: audiocap }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            dist/ButShare-Setup.exe
+            dist/ButShare-Setup.exe.blockmap
+            dist/latest.yml
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test
+      - run: npm run dist:linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            dist/ButShare.AppImage
+            dist/latest-linux.yml
+
+  release:
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # A tag tem que bater com o package.json, senão o atualizador não enxerga a versão nova
+      - run: |
+          v=$(node -p "require('./package.json').version")
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME, mas o package.json diz $v"; exit 1; }
+      - uses: actions/download-artifact@v4
+        with: { path: arquivos, merge-multiple: true }
+      # O texto do Release é a mensagem da tag (git tag -a vX.Y.Z -m "novidades")
+      - run: |
+          git fetch --force --depth=1 origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          gh release create "$GITHUB_REF_NAME" arquivos/* --title "${GITHUB_REF_NAME#v}" --notes-from-tag
+        env: { GH_TOKEN: '${{ github.token }}' }

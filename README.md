@@ -27,14 +27,15 @@ Compartilhar a tela com os amigos, com qualidade e sem o áudio do Discord.
 
 Só precisa quando muda `main.js`, `preload.js`, `discord.js`, `audiolinux.js` ou o `audiocap`. Mudanças só no `index.html` não precisam.
 
-1. Suba o número em `package.json` (`"version"`). **Sem isso o aviso de atualização não aparece.**
-2. `npm install`
-3. `npm test`
-4. `npm run audiocap` (precisa do `x86_64-w64-mingw32-g++`)
-5. `npm run dist` (no Linux, precisa do Wine com 32 bits) e `npm run dist:linux`
-6. Instale `dist/ButShare-Setup.exe` e rode `dist/ButShare.AppImage`, e teste: compartilhar, trocar tela, áudio.
-7. No GitHub: **Releases → Draft a new release**, tag `vX.Y.Z`, envie `ButShare-Setup.exe`,
-   `ButShare-Setup.exe.blockmap`, `latest.yml`, `ButShare.AppImage` e `latest-linux.yml`, e publique.
+1. Suba o número em `package.json` (`"version"`) e rode `npm install`. **Sem isso o aviso de atualização não aparece.**
+2. Teste com `npm start` (abre o `index.html` da pasta): compartilhar, trocar tela, áudio.
+3. Faça o commit e o push, e mande a tag com as novidades (vira o texto do Release):
+   `git tag -a vX.Y.Z -m "o que mudou"` e `git push origin vX.Y.Z`
+4. O GitHub Actions (`.github/workflows/release.yml`) gera o instalador do Windows e o AppImage
+   e publica o Release com `ButShare-Setup.exe`, `.blockmap`, `latest.yml`, `ButShare.AppImage` e `latest-linux.yml`.
+   Acompanhe na aba **Actions** do repositório.
+
+Para gerar à mão: `npm run audiocap` (precisa do `x86_64-w64-mingw32-g++`), `npm run dist` (no Linux, precisa do Wine) e `npm run dist:linux`.
 
 ## Diagnóstico
 
