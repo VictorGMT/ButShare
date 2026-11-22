@@ -65,7 +65,7 @@ jobs:
           v=$(node -p "require('./package.json').version")
           [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME, mas o package.json diz $v"; exit 1; }
       - uses: actions/download-artifact@v4
-        with: { path: arquivos, merge-multiple: true }
+        with: { path: arquivos, pattern: '{windows,linux}', merge-multiple: true }   # o audiocap.exe já vai dentro do instalador
       # O texto do Release é a mensagem da tag (git tag -a vX.Y.Z -m "novidades")
       - run: |
           git fetch --force --depth=1 origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
