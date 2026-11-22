@@ -2,13 +2,15 @@
 const { app, BrowserWindow, desktopCapturer, ipcMain, shell, session } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
-const { autoUpdater } = require('electron-updater');
+// electron-updater é pesado de carregar (dezenas de arquivos): só é carregado depois que a janela abriu, ver atualizador()
 const discord = require('./discord');
 const audioLinux = require('./audiolinux');
 
 // A interface vem do site: o que for publicado no GitHub chega pra todo mundo ao abrir o app.
 // Sem internet (ou site fora do ar), usa a cópia que vai dentro do .exe.
 const SITE = 'https://victorgmt.github.io/ButShare/';
+const SITE_MS = 6000;   // espera máxima pelo site antes de usar a cópia de dentro do app
+let janela = null;
 
 // Pede ao Windows para não desenhar a borda amarela em volta da tela capturada (vale no Windows 11)
 app.commandLine.appendSwitch('disable-features', 'WebRtcWgcRequireBorder');
@@ -70,13 +72,22 @@ function criarJanela() {
     // Já são o padrão do Electron; ficam escritos para não sumirem se o padrão mudar
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true, nodeIntegration: false }
   });
-  win.loadURL(SITE, { extraHeaders: 'Cache-Control: no-cache\n' });
+  janela = win;
+  // Rodando pelo npm start: abre o index.html desta pasta, pra testar mudanças antes de subir pro site
+  const local = !app.isPackaged;
+  // Site lento (internet ruim, GitHub demorando): depois de SITE_MS usa a cópia de dentro do app em vez de ficar na tela vazia
+  let copia = local;
+  const usarCopia = () => { clearTimeout(lento); if (!copia && !win.isDestroyed()) { copia = true; win.loadFile('index.html'); } };
+  const lento = local ? null : setTimeout(usarCopia, SITE_MS);
+  win.webContents.once('did-finish-load', () => clearTimeout(lento));
+  if (local) win.loadFile('index.html');
+  else win.loadURL(SITE, { extraHeaders: 'Cache-Control: no-cache\n' });
   win.webContents.on('did-fail-load', (_e, codigo, _desc, url, principal) => {
-    if (principal && codigo !== -3 && url.startsWith(SITE)) win.loadFile('index.html');  // -3 = navegação cancelada
+    if (principal && codigo !== -3 && url.startsWith(SITE)) usarCopia();  // -3 = navegação cancelada
   });
   // Site respondeu com erro (ex.: 404 se o endereço mudar): também usa a cópia de dentro do app
   win.webContents.on('did-navigate', (_e, url, status) => {
-    if (status >= 400 && url.startsWith(SITE)) win.loadFile('index.html');
+    if (status >= 400 && url.startsWith(SITE)) usarCopia();
   });
   // A janela só mostra o próprio site; qualquer outro link abre no navegador padrão
   win.webContents.on('will-navigate', (e, url) => {
@@ -92,28 +103,35 @@ function criarJanela() {
 // Atualização do app: procura versão nova nos Releases do GitHub e avisa a página (o sino da barra de cima).
 // Nada é baixado nem instalado sem a pessoa clicar: Baixar, e depois Instalar agora.
 let avisarErro = false;   // erro só aparece se a pessoa pediu (clicou no sino ou em Baixar); o automático fica quieto
+let au = null;
+function atualizador() {
+  if (au) return au;
+  au = require('electron-updater').autoUpdater;
+  const avisar = d => { if (janela && !janela.isDestroyed()) janela.webContents.send('update', { ...d, atual: app.getVersion() }); };
+  au.autoDownload = false;
+  au.autoInstallOnAppQuit = true;   // baixou e escolheu "Depois": instala quando o app fechar
+  au.on('update-available', info => avisar({ estado: 'disponivel', versao: info.version }));
+  au.on('update-not-available', () => avisar({ estado: 'em-dia' }));
+  au.on('download-progress', p => avisar({ estado: 'baixando', pct: Math.round(p.percent) }));
+  au.on('update-downloaded', info => avisar({ estado: 'pronto', versao: info.version }));
+  au.on('error', err => { if (avisarErro) { avisarErro = false; avisar({ estado: 'erro', msg: err.message }); } });
+  return au;
+}
+// Procura sozinho alguns segundos depois da página abrir, pra não disputar o começo com ela
 function verificarUpdate(win) {
   if (!app.isPackaged) return;
-  const avisar = d => { if (!win.isDestroyed()) win.webContents.send('update', { ...d, atual: app.getVersion() }); };
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;   // baixou e escolheu "Depois": instala quando o app fechar
-  autoUpdater.on('update-available', info => avisar({ estado: 'disponivel', versao: info.version }));
-  autoUpdater.on('update-not-available', () => avisar({ estado: 'em-dia' }));
-  autoUpdater.on('download-progress', p => avisar({ estado: 'baixando', pct: Math.round(p.percent) }));
-  autoUpdater.on('update-downloaded', info => avisar({ estado: 'pronto', versao: info.version }));
-  autoUpdater.on('error', err => { if (avisarErro) { avisarErro = false; avisar({ estado: 'erro', msg: err.message }); } });
-  win.webContents.once('did-finish-load', () => autoUpdater.checkForUpdates().catch(() => {}));
+  win.webContents.once('did-finish-load', () => setTimeout(() => atualizador().checkForUpdates().catch(() => {}), 3000));
 }
 ipcMain.handle('update-verificar', () => {
   if (!app.isPackaged) return { estado: 'em-dia', atual: app.getVersion() };   // rodando pelo npm start
   avisarErro = true;
-  autoUpdater.checkForUpdates().catch(() => {});
+  atualizador().checkForUpdates().catch(() => {});
 });
 ipcMain.handle('update-baixar', () => {
   avisarErro = true;
-  autoUpdater.downloadUpdate().catch(() => {});
+  atualizador().downloadUpdate().catch(() => {});
 });
-ipcMain.handle('update-instalar', () => autoUpdater.quitAndInstall(true, true));   // fecha, instala calado e reabre
+ipcMain.handle('update-instalar', () => atualizador().quitAndInstall(true, true));   // fecha, instala calado e reabre
 
 // Telas e janelas para o seletor, com miniatura
 ipcMain.handle('fontes', async (e) => {
@@ -167,8 +185,19 @@ ipcMain.handle('discord', (_e, d) => {
   } : null);
 });
 
-app.whenReady().then(() => {
-  travarPermissoes(session.defaultSession);
-  criarJanela();
-});
+// Um app só: clicar no atalho de novo (ex.: porque demorou a abrir) traz a janela que já existe,
+// em vez de abrir outro ButShare inteiro por cima, que pesa o PC e briga pela mesma pasta de dados
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!janela || janela.isDestroyed()) return;
+    if (janela.isMinimized()) janela.restore();
+    janela.show(); janela.focus();
+  });
+  app.whenReady().then(() => {
+    travarPermissoes(session.defaultSession);
+    criarJanela();
+  });
+}
 app.on('window-all-closed', () => { pararAudio(); app.quit(); });
